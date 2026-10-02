@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyMasking } from '../../src/alert/masking';
-import { analyzeDetections } from '../../src/alert/policy';
+import { analyzeDetections, buildReviewResult } from '../../src/alert/policy';
 import type { Detection, PiiType } from '../../src/core/api/types';
 import { deduplicateDetections } from '../../src/core/detector/ko-pii/dedup';
 import { createReviewRequest, resolveReview } from '../../src/modules/documents/shared/review';
@@ -93,5 +93,30 @@ describe('merged model regions → policy → masking', () => {
     ]);
     expect(resolveReview(request, { status: 'approved', autoMask: items, confirm: { masking: [], nonMasking: [] } }))
       .toEqual([{ segmentId: 's', spans: [{ start: 0, end: 10 }] }]);
+  });
+
+  it.each([
+    ['partial overlap', detection(0, 5, 'PHONE'), detection(3, 10, 'PERSON')],
+    ['contained mask', detection(3, 5, 'PHONE'), detection(0, 10, 'PERSON')],
+    ['contained keep', detection(0, 10, 'PHONE'), detection(3, 5, 'PERSON')],
+    ['identical spans with conflicting types', detection(0, 10, 'PHONE'), detection(0, 10, 'GENERIC_ID')],
+    ['selected Confirm', detection(0, 5, 'PERSON'), detection(3, 10, 'PERSON')],
+    ['adjacent spans', detection(0, 5, 'PHONE'), detection(5, 10, 'PERSON')],
+  ] as const)('resolves document %s without extending masks into unselected-only coverage', (_, masked, kept) => {
+    const text = 'abcdefghij';
+    const detections = regions([masked, kept]);
+    const analysis = analyzeDetections(text, detections, 's');
+    const selected = analysis.confirmDetections.filter(d =>
+      d.type === masked.type && d.span.start === masked.span.start && d.span.end === masked.span.end);
+    const decision = buildReviewResult(analysis, selected);
+    expect(decision.confirm.nonMasking).toHaveLength(1);
+    const request = createReviewRequest([{ id: 's', text }, { id: 'other', text }], [
+      { segmentId: 's', detections }, { segmentId: 'other', detections: [] },
+    ]);
+    const snapshot = structuredClone({ request, decision });
+    expect(resolveReview(request, decision)).toEqual([
+      { segmentId: 's', spans: [masked.span] }, { segmentId: 'other', spans: [] },
+    ]);
+    expect({ request, decision }).toEqual(snapshot);
   });
 });
