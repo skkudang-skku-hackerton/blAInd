@@ -1,4 +1,5 @@
 import type { ApprovedReview, Detection, DetectionPolicy, PiiType, PrivacyAnalysis } from './types';
+import { expandDetections } from '../core/api/detections';
 
 const AUTO_MASK_TYPES = new Set<PiiType>([
   'RRN', 'FRN', 'CARD_NUMBER', 'ACCOUNT_NUMBER', 'SECRET', 'PASSPORT',
@@ -11,7 +12,7 @@ export function classifyDetection(type: PiiType): DetectionPolicy {
 
 export function analyzeDetections(text: string, detections: Detection[], segmentId = 'text'): PrivacyAnalysis {
   const seen = new Set<string>();
-  const usableDetections = detections.filter(({ type, span }) => {
+  const usableDetections = expandDetections(detections).filter(({ type, span }) => {
     if (!Number.isInteger(span.start) || !Number.isInteger(span.end)
       || span.start < 0 || span.end <= span.start || span.end > text.length) return false;
     const key = `${type}:${span.start}:${span.end}`;
