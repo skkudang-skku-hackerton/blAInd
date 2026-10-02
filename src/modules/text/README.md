@@ -10,7 +10,7 @@ const interceptor = createTextSubmitInterceptor({
   adapter: getTextSiteAdapter('chatgpt'),
   onIntercept({ text, editor, siteId, source }) {
     // source는 'enter' 또는 'button'입니다. 이후 처리는 공통으로 연결합니다.
-    // 다음 단계: text 검사 → 탐지 항목 선택 → 유효성 확인 → editor 교체·전송.
+    // text 검사 → 탐지 항목 선택 → 유효성 확인 → editor 교체·전송.
     // 검사하는 동안 입력창이 바뀔 수 있으므로 전달된 원문을 기준으로 검사합니다.
   },
   onError(error) {
@@ -73,7 +73,7 @@ LinkeDOM은 브라우저의 capture 순서와 기본 form 제출을 구현하지
 1. `npm run build` 후 확장과 AI 페이지를 새로고침합니다.
 2. 채팅 입력창에 테스트 문장을 쓰고 Enter를 누릅니다.
 3. 질문이 전송되지 않고 원문이 남으며, 보류 안내와 `[blAInd] Enter intercepted: <사이트명>` 로그가 나타나는지 확인합니다. 최초 검사에서는 약 483 MB의 INT8 모델을 다운로드하므로 준비 시간이 필요합니다.
-4. `[blAInd] PII scan started` 이후 `PII scan completed`와 탐지 개수·유형을 확인합니다. 예: `김민수의 연락처는 010-1234-5678입니다.` Alert에서 Confirm 항목을 선택하고 진행하면 `[blAInd] Masked text (preview only)` 로그에 최종 텍스트가 출력됩니다. Auto Mask는 항상 적용됩니다. 취소하면 출력하지 않습니다. 실제 전송과 입력창 교체는 하지 않습니다.
+4. `[blAInd] PII scan started` 이후 `PII scan completed`와 탐지 개수·유형을 확인합니다. 예: `김민수의 연락처는 010-1234-5678입니다.` Alert에서 Confirm 항목을 선택하고 진행하면 마스킹한 텍스트로 입력창을 교체하고 전송 버튼을 한 번 호출합니다. Auto Mask는 항상 적용됩니다. 취소하면 전송하지 않습니다. 콘솔의 `[blAInd] Approved text send requested`는 전송 버튼 호출을 의미하며 서버 수신 완료를 보장하지 않습니다.
 5. 전송 버튼을 직접 눌러 같은 검사 흐름과 `[blAInd] Send button intercepted: <사이트명>` 로그가 나타나는지 확인합니다. 아이콘을 눌러도 동일해야 합니다.
 6. Shift+Enter로 줄바꿈이 되고 한글 조합 확정이 유지되는지 확인합니다. 첨부·음성·생성 중지 버튼도 정상 동작해야 합니다.
 7. 검사 중 입력을 수정하거나 다른 대화로 이동하면 결과가 폐기되는지, 새 대화에서 다시 검사할 수 있는지 확인합니다.

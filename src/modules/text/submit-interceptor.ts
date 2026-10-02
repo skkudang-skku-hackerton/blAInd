@@ -11,6 +11,7 @@ export function createTextSubmitInterceptor(
   const root = options.root ?? window;
   let started = false;
   let composing = new WeakSet<HTMLElement>();
+  let approvedClick: { event: Event; editor: HTMLElement; text: string; button: HTMLElement; consumed: boolean } | null = null;
   let heldEditor: HTMLElement | null = null;
 
   function hold(event: Event): void {
@@ -57,6 +58,20 @@ export function createTextSubmitInterceptor(
   }
 
   function onClick(event: Event): void {
+    if (approvedClick?.event === event) {
+      const approval = approvedClick;
+      approvedClick = null;
+      try {
+        if (options.adapter.findSendButton(event) === approval.button
+          && options.adapter.findEditorForSendButton(approval.button) === approval.editor
+          && options.adapter.readText(approval.editor) === approval.text) {
+          approval.consumed = true;
+          return;
+        }
+      } catch { /* 검증 실패 시 승인 이벤트도 차단합니다. */ }
+      hold(event);
+      return;
+    }
     const button = options.adapter.findSendButton(event);
     if (!button) return;
 
@@ -101,6 +116,18 @@ export function createTextSubmitInterceptor(
   ];
 
   return {
+    sendApproved(button, editor, text) {
+      if (!started || !editor.isConnected || !button.isConnected) throw new Error('Send target is unavailable');
+      const event = new button.ownerDocument.defaultView!.MouseEvent('click', {
+        bubbles: true, cancelable: true, composed: true,
+      });
+      const approval = { event, editor, text, button, consumed: false };
+      approvedClick = approval;
+      try {
+        button.dispatchEvent(event);
+        if (!approval.consumed) throw new Error('Approved send was not accepted');
+      } finally { approvedClick = null; }
+    },
     start() {
       if (started) return;
       started = true;
@@ -112,6 +139,7 @@ export function createTextSubmitInterceptor(
       for (const [type, listener] of listeners) root.removeEventListener(type, listener, true);
       composing = new WeakSet();
       heldEditor = null;
+      approvedClick = null;
     },
   };
 }

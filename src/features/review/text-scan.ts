@@ -112,6 +112,7 @@ export function createTextScanController(options: TextScanOptions) {
     },
     invalidate,
     cancel(): void { cancel(true); },
+    clear(): void { cancel(false); },
     dispose(): void {
       disposed = true;
       cancel(false);
