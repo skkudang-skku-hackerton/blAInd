@@ -124,6 +124,17 @@ describe('KoPiiRuntime lifecycle and backend fallback', () => {
     await expect(new KoPiiRuntime({ wasmPaths: 'https://cdn.example.com/ort/' }).initialize()).rejects.toMatchObject({ code: 'MODEL_LOAD_FAILED' });
     expect(mocks.create).not.toHaveBeenCalled();
   });
+  it('resolves packaged WASM assets from a Firefox moz-extension worker origin', async () => {
+    vi.stubGlobal('location', {
+      href: 'moz-extension://blaind-id/assets/inference.worker.js',
+      protocol: 'moz-extension:', origin: 'moz-extension://blaind-id',
+    });
+    const runtime = new KoPiiRuntime({ preferredBackend: 'wasm' });
+    await runtime.initialize();
+    expect(mocks.env.wasm).toEqual({
+      wasmPaths: 'moz-extension://blaind-id/ort-wasm/', numThreads: 1, proxy: false,
+    });
+  });
   it('promotes binary16 logits exactly, including signed zero and subnormals', async () => {
     const runtime = new KoPiiRuntime();
     await runtime.initialize();
