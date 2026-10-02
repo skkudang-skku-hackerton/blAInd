@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyMasking } from '../../src/alert/masking';
-import { analyzeDetections, createFinalText } from '../../src/alert/policy';
+import { analyzeDetections } from '../../src/alert/policy';
 import type { Detection, PiiType } from '../../src/core/api/types';
 import { deduplicateDetections } from '../../src/core/detector/ko-pii/dedup';
 import { createReviewRequest, resolveReview } from '../../src/modules/documents/shared/review';
@@ -10,6 +10,8 @@ const detection = (start: number, end: number, type: PiiType = 'RRN'): Detection
 const regions = (detections: Detection[]) => deduplicateDetections(detections.map((d, chunkIndex) => ({
   ...d, chunkIndex, truncatedStart: false, truncatedEnd: false,
 })));
+const finalText = (analysis: ReturnType<typeof analyzeDetections>, selected: readonly Detection[] = []) =>
+  applyMasking(analysis.originalText, [...analysis.autoMaskedDetections, ...selected]);
 
 describe('selected-span union masking', () => {
   it.each([
@@ -46,7 +48,7 @@ describe('merged model regions → policy → masking', () => {
     expect(detections).toHaveLength(1);
     const analysis = analyzeDetections('abcdefghij', detections);
     expect(analysis.autoMaskedDetections).toHaveLength(2);
-    expect(analysis.autoMaskedText).toBe('[RRN_1]');
+    expect(finalText(analysis)).toBe('[RRN_1]');
   });
 
   it('masks both fragments of the reported real-model CARD_NUMBER spans', () => {
@@ -55,7 +57,7 @@ describe('merged model regions → policy → masking', () => {
       { ...detection(1344, 1356, 'CARD_NUMBER'), chunkIndex: 1, truncatedStart: false, truncatedEnd: false },
     ]);
     const text = 'a'.repeat(1121) + 'x'.repeat(235) + ' untouched';
-    expect(analyzeDetections(text, detections).autoMaskedText).toBe('a'.repeat(1121) + '[CARD_NUMBER_1] untouched');
+    expect(finalText(analyzeDetections(text, detections))).toBe('a'.repeat(1121) + '[CARD_NUMBER_1] untouched');
   });
 
   it.each([
@@ -66,8 +68,8 @@ describe('merged model regions → policy → masking', () => {
     const analysis = analyzeDetections('abcdefghij', regions([auto, confirm]));
     expect(analysis.autoMaskedDetections).toEqual([auto]);
     expect(analysis.confirmDetections).toEqual([confirm]);
-    expect(createFinalText(analysis)).toBe(expected);
-    const selected = createFinalText(analysis, analysis.confirmDetections);
+    expect(finalText(analysis)).toBe(expected);
+    const selected = finalText(analysis, analysis.confirmDetections);
     expect(selected).not.toMatch(/[a-j]/);
   });
 
@@ -75,11 +77,11 @@ describe('merged model regions → policy → masking', () => {
     const analysis = analyzeDetections('abcdefghij', regions([
       detection(0, 5, 'PERSON'), detection(3, 10, 'PERSON'),
     ]));
-    expect(createFinalText(analysis)).toBe('abcdefghij');
+    expect(finalText(analysis)).toBe('abcdefghij');
     expect(analysis.confirmDetections).toHaveLength(2);
-    expect(createFinalText(analysis, [analysis.confirmDetections[0]!])).toBe('[PERSON_1]fghij');
-    expect(createFinalText(analysis, [analysis.confirmDetections[1]!])).toBe('abc[PERSON_1]');
-    expect(createFinalText(analysis, analysis.confirmDetections)).toBe('[PERSON_1]');
+    expect(finalText(analysis, [analysis.confirmDetections[0]!])).toBe('[PERSON_1]fghij');
+    expect(finalText(analysis, [analysis.confirmDetections[1]!])).toBe('abc[PERSON_1]');
+    expect(finalText(analysis, analysis.confirmDetections)).toBe('[PERSON_1]');
   });
 
   it('expands merged regions for document review and masks the selected union', () => {

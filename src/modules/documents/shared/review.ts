@@ -1,5 +1,6 @@
 import { PII_TYPES } from '../../../core/pii/types';
 import type { SegmentDetectionResult, TextSegment } from '../../../core/api/types';
+import { expandDetections } from '../../../core/api/detections';
 import type { AlertReviewDecision, AlertReviewRequest, SegmentMasks, ReviewItem, Span } from './types';
 
 const AUTO = new Set([
@@ -34,7 +35,7 @@ export function createReviewRequest(
   }
   return { segments: segments.map(({ id, text }) => {
     const seen = new Set<string>();
-    return { id, text, detections: byId.get(id)!.detections.map((detection) => {
+    return { id, text, detections: expandDetections(byId.get(id)!.detections).map((detection) => {
       checkSpan(text, detection.span);
       if (!PII_TYPES.includes(detection.type) || !Number.isFinite(detection.confidence) ||
           detection.confidence < 0 || detection.confidence > 1) throw new Error('Invalid detection');
