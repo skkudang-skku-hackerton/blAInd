@@ -16,10 +16,6 @@ test-results/
 .codex/
 .aws/
 
-# Downloaded model artifacts (managed in the model repository)
-public/models/*
-!public/models/.gitkeep
-
 # Editor, OS, and log files
 .idea/
 .vscode/
