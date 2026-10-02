@@ -10,7 +10,7 @@
  */
 
 import { protectStatusUi } from '../../../../shared/status-ui-events';
-import { createPopupLogo, popupThemeStyles } from '../../../../alert/popup-theme';
+import { createLoadingLogo, popupThemeStyles } from '../../../../alert/popup-theme';
 import { ensureAlertFonts } from '../../../../alert/typography';
 import { processingIndicatorStyles } from '../../processing-indicator-styles';
 
@@ -109,14 +109,10 @@ export function createProcessingIndicator(
     header.className = 'blaind-popup-header';
     titleEl = document.createElement('div');
     titleEl.className = 'title';
-    header.append(createPopupLogo(document), titleEl);
+    header.append(createLoadingLogo(document), titleEl);
 
     const message = document.createElement('div');
     message.className = 'blaind-popup-message processing-message';
-    const spinner = document.createElement('span');
-    spinner.className = 'spinner';
-    spinner.setAttribute('aria-hidden', 'true');
-
     const text = document.createElement('div');
     text.className = 'processing-copy';
     filesEl = document.createElement('div');
@@ -125,7 +121,7 @@ export function createProcessingIndicator(
     detailEl.className = 'detail';
     text.append(filesEl, detailEl);
 
-    message.append(spinner, text);
+    message.append(text);
     wrap.append(header, message);
     shadow.append(style, wrap);
     getHostParent().append(host);
