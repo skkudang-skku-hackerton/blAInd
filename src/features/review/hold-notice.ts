@@ -27,9 +27,10 @@ export function createHoldNotice(page: Document = document) {
           :host { color-scheme: light; }
           section { box-sizing:border-box; width:320px; max-width:calc(100vw - 40px);
             padding:16px; border:1px solid #E7E7E3; border-radius:8px;
-            background:#FFFFFF; color:#191919; font:14px/1.6 system-ui,sans-serif;
+            background:#FFFFFF; color:#191919; font:400 14px/1.6 "blAInd Numerals","IBM Plex Sans KR",sans-serif;
             box-shadow:none; }
           strong { font-size:14px; } p { color:#6F6F6B; margin:8px 0 12px; }
+          .brand { font-family:"IBM Plex Mono",monospace; font-weight:700; }
           button { padding:5px 12px; border:1px solid #E7E7E3; border-radius:6px;
             background:#FCFCFB; color:#191919; font:inherit; cursor:pointer; }
           button:hover { background:#F1F3FF; }
@@ -39,7 +40,10 @@ export function createHoldNotice(page: Document = document) {
         panel.setAttribute('role', 'status');
         panel.setAttribute('aria-live', 'polite');
         const title = page.createElement('strong');
-        title.textContent = 'blAInd · 전송 보류';
+        const brand = page.createElement('span');
+        brand.className = 'brand';
+        brand.textContent = 'blAInd';
+        title.append(brand, ' · 전송 보류');
         messageNode = page.createElement('p');
         const close = page.createElement('button');
         close.type = 'button';

@@ -18,6 +18,10 @@ Alert는 승인 시 Auto Mask 항목과 Confirm의 마스킹/원문 유지 항�
 
 ## 정책
 
+아래 표는 초기 기본값입니다. 확장 프로그램 버튼의 사용자 설정에서 지원하는 18개 라벨 각각을 `AUTO_MASK` 또는 `CONFIRM`으로 바꾸고 저장할 수 있습니다. 설정은 `browser.storage.local`에 저장되며 다음 검사부터 적용됩니다.
+
+문서 요청은 `maskingPreferences?: Record<PiiType, 'AUTO_MASK' | 'CONFIRM'>` 필드에 검사 당시 설정의 복사본을 포함합니다. Alert 표시와 응답 검증 모두 이 복사본을 사용하므로 확인 중 설정을 변경해도 진행 중인 문서의 분류는 유지됩니다. 이 필드가 없는 기존 요청은 아래 기본값을 사용합니다.
+
 | 구분 | PII type |
 | --- | --- |
 | Auto Mask | `RRN`, `FRN`, `CARD_NUMBER`, `ACCOUNT_NUMBER`, `SECRET`, `PASSPORT`, `DRIVER_LICENSE`, `CVC`, `IPIN`, `PHONE`, `EMAIL` |

@@ -81,7 +81,8 @@ describe('PDF review contract', () => {
     expect(request.segments[0]!.detections[0]).toEqual({ type: 'PERSON', confidence: 0.9,
       span: { start: 3, end: 6 }, word: '김민수' });
     expect(results).toEqual(before);
-    expect(Object.keys(request)).toEqual(['segments']);
+    expect(Object.keys(request)).toEqual(['maskingPreferences', 'segments']);
+    expect(request.maskingPreferences?.PERSON).toBe('CONFIRM');
   });
 
   it('applies Auto Mask and chosen Confirm while retaining the same word on another page', async () => {

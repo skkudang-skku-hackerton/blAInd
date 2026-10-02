@@ -1,16 +1,12 @@
 import type { ApprovedReview, Detection, DetectionPolicy, PiiType, PrivacyAnalysis } from './types';
 import { expandDetections } from '../core/api/detections';
+import { getMaskingPreferences, type MaskingPreferences } from '../core/pii/preferences';
 
-const AUTO_MASK_TYPES = new Set<PiiType>([
-  'RRN', 'FRN', 'CARD_NUMBER', 'ACCOUNT_NUMBER', 'SECRET', 'PASSPORT',
-  'DRIVER_LICENSE', 'CVC', 'IPIN', 'PHONE', 'EMAIL',
-]);
-
-export function classifyDetection(type: PiiType): DetectionPolicy {
-  return AUTO_MASK_TYPES.has(type) ? 'AUTO_MASK' : 'CONFIRM';
+export function classifyDetection(type: PiiType, preferences = getMaskingPreferences()): DetectionPolicy {
+  return preferences[type];
 }
 
-export function analyzeDetections(text: string, detections: Detection[], segmentId = 'text'): PrivacyAnalysis {
+export function analyzeDetections(text: string, detections: Detection[], segmentId = 'text', preferences: MaskingPreferences = getMaskingPreferences()): PrivacyAnalysis {
   const seen = new Set<string>();
   const usableDetections = expandDetections(detections).filter(({ type, span }) => {
     if (!Number.isInteger(span.start) || !Number.isInteger(span.end)
@@ -20,8 +16,8 @@ export function analyzeDetections(text: string, detections: Detection[], segment
     seen.add(key);
     return true;
   });
-  const autoMaskedDetections = usableDetections.filter(({ type }) => classifyDetection(type) === 'AUTO_MASK');
-  const confirmDetections = usableDetections.filter(({ type }) => classifyDetection(type) === 'CONFIRM');
+  const autoMaskedDetections = usableDetections.filter(({ type }) => classifyDetection(type, preferences) === 'AUTO_MASK');
+  const confirmDetections = usableDetections.filter(({ type }) => classifyDetection(type, preferences) === 'CONFIRM');
   return {
     segmentId,
     originalText: text,

@@ -1,7 +1,9 @@
 import type { Detection, PiiType, TextSegment } from '../../../core/api/types';
+import type { MaskingPreferences } from '../../../core/pii/preferences';
 
 /** Exact payload defined by docs/alert-review-api.md. */
 export interface AlertReviewRequest {
+  maskingPreferences?: MaskingPreferences;
   segments: Array<TextSegment & { detections: Array<Detection & { word: string }> }>;
 }
 export interface ReviewItem {

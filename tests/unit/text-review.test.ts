@@ -39,7 +39,7 @@ describe('model result → privacy review → preview output', () => {
   it('shows the detected value and masks selected Confirm plus mandatory Auto items', () => {
     const f = setup();
     expect(f.root()!.querySelector('[role=dialog]')!.textContent).toContain('김민수');
-    f.root()!.querySelector('input')!.setAttribute('checked', '');
+    f.root()!.querySelector<HTMLInputElement>('.blaind-alert-items input')!.checked = true;
     f.click('.blaind-alert-mask');
     expect(f.onApproved).toHaveBeenCalledExactlyOnceWith('[PERSON_1] [PHONE_1]');
     expect(f.editor.value).toBe('김민수 010-1234-5678');
@@ -57,9 +57,9 @@ describe('model result → privacy review → preview output', () => {
         { type: 'PHONE', confidence: 0.99, span: { start: 4, end: 17 } },
       ],
     }]);
-    expect(f.root()!.querySelectorAll('input')).toHaveLength(1);
+    expect(f.root()!.querySelectorAll('.blaind-alert-items input')).toHaveLength(1);
     expect(f.root()!.querySelector('.blaind-alert-value')!.textContent).toBe('김민수 010');
-    if (selectConfirm) f.root()!.querySelector('input')!.setAttribute('checked', '');
+    if (selectConfirm) f.root()!.querySelector<HTMLInputElement>('.blaind-alert-items input')!.checked = true;
     f.click(selectConfirm ? '.blaind-alert-mask' : '.blaind-alert-keep');
     expect(f.onApproved).toHaveBeenCalledExactlyOnceWith(selectConfirm ? '[PERSON_1]' : '김민수 [PHONE_1]');
   });
