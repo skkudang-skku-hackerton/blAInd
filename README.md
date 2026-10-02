@@ -56,6 +56,12 @@ npm run typecheck
 npm run build
 ```
 
+배포 전 검증과 두 브라우저 빌드는 `npm ci` 후 `npm run build:release`로 실행합니다.
+이 명령은 타입 검사와 두 단위 테스트 모음을 통과한 뒤 Chrome과 Firefox를 빌드합니다.
+`npm run build`는 빠른 Chrome 번들 생성용이며 타입 검사나 테스트를 실행하지 않습니다.
+ONNX Runtime은 외부 ESM/WASM 파일을 확장 내부 `ort-wasm/`에서 로드합니다.
+Chrome은 WASM과 WebGPU용 Asyncify 런타임을 포함하고 Firefox는 WASM 런타임만 포함합니다.
+
 1. 크롬 `chrome://extensions`에서 개발자 모드를 켜고, **압축해제된 확장 프로그램을 로드합니다**로 `.output/chrome-mv3`를 선택합니다.
 2. 이미 로드했다면 blAInd 카드의 새로고침 버튼을 누릅니다. 새 Background 설정을 반영하려면 확장도 다시 로드해야 합니다.
 3. 등록된 AI 페이지의 개발자 도구에서 Console을 열고 페이지를 새로고침합니다.
