@@ -60,7 +60,7 @@ async function sampleRequest() {
 }
 
 describe('PDF review contract', () => {
-  it('enforces every documented Auto Mask and Confirm category', () => {
+  it('applies every documented category default and allows explicitly keeping either category', () => {
     const auto = new Set(['RRN', 'FRN', 'CARD_NUMBER', 'ACCOUNT_NUMBER', 'SECRET', 'PASSPORT',
       'DRIVER_LICENSE', 'CVC', 'IPIN', 'PHONE', 'EMAIL']);
     for (const type of PII_TYPES) {
@@ -70,6 +70,8 @@ describe('PDF review contract', () => {
       const decision: AlertReviewDecision = { status: 'approved', autoMask: auto.has(type) ? [item] : [],
         confirm: { masking: [], nonMasking: auto.has(type) ? [] : [item] } };
       expect(resolveReview(request, decision)![0]!.spans.length).toBe(auto.has(type) ? 1 : 0);
+      expect(resolveReview(request, { status: 'approved', autoMask: [],
+        confirm: { masking: [], nonMasking: [item] } })).toEqual([{ segmentId: 'page-1', spans: [] }]);
     }
   });
 
@@ -98,9 +100,21 @@ describe('PDF review contract', () => {
     const decision = approve(request);
     if (kind === 'omitted') decision.autoMask = [];
     if (kind === 'duplicate') decision.autoMask.push(structuredClone(decision.autoMask[0]!));
-    if (kind === 'wrong-policy') decision.confirm.nonMasking.push(decision.autoMask.pop()!);
+    if (kind === 'wrong-policy') decision.confirm.masking.push(decision.autoMask.pop()!);
     if (kind === 'forged-word') decision.autoMask[0]!.word = 'other';
     if (kind === 'forged-span') decision.autoMask[0]!.span.start++;
+    expect(() => resolveReview(request, decision)).toThrow();
+  });
+
+  it.each(['duplicate', 'unknown', 'forged-word', 'forged-span'])('rejects %s unchecked automatic items', async (kind) => {
+    const request = await sampleRequest();
+    const decision = approve(request);
+    const unchecked = decision.autoMask.pop()!;
+    decision.confirm.nonMasking.push(unchecked);
+    if (kind === 'duplicate') decision.confirm.nonMasking.push(structuredClone(unchecked));
+    if (kind === 'unknown') unchecked.segmentId = 'unknown-page';
+    if (kind === 'forged-word') unchecked.word = 'other';
+    if (kind === 'forged-span') unchecked.span.start++;
     expect(() => resolveReview(request, decision)).toThrow();
   });
 
@@ -118,6 +132,42 @@ describe('PDF review contract', () => {
 });
 
 describe('PDF pipeline with real PDFs', () => {
+  it('retains an unchecked default PHONE on one page while masking the selected occurrence on another', async () => {
+    const errors: unknown[] = [];
+    const review = vi.fn(async (request: AlertReviewRequest): Promise<AlertReviewDecision> => {
+      const decisions = request.segments.map(segment => {
+        const analysis = analyzeDetections(segment.text, segment.detections, segment.id, request.maskingPreferences);
+        return buildReviewResult(analysis, analysis.confirmDetections,
+          segment.id === 'page-1' ? analysis.autoMaskedDetections : []);
+      });
+      return { status: 'approved', autoMask: decisions.flatMap(decision => decision.autoMask), confirm: {
+        masking: decisions.flatMap(decision => decision.confirm.masking),
+        nonMasking: decisions.flatMap(decision => decision.confirm.nonMasking),
+      } };
+    });
+    const processor = createPdfProcessor({ detector, review, openPdf, onError: error => errors.push(error) });
+    const source = fixture(['김민수 전화 010-1234-5678', '김민수 전화 010-1234-5678 retained']);
+    const file = await processor(new File([source], 'input.pdf'), new AbortController().signal);
+    expect(errors).toEqual([]);
+    expect(file).not.toBeNull();
+    const output = mupdf.Document.openDocument(await file!.arrayBuffer(), 'application/pdf');
+    try {
+      expect(output.countPages()).toBe(2);
+      for (let index = 0; index < 2; index++) {
+        const page = output.loadPage(index), text = page.toStructuredText('');
+        try {
+          expect(text.asText()).not.toContain('김민수');
+          if (index === 0) expect(text.asText()).not.toContain('010-1234-5678');
+          else {
+            expect(text.asText()).toContain('010-1234-5678');
+            expect(text.asText()).toContain('retained');
+          }
+        } finally { text.destroy(); page.destroy(); }
+      }
+    } finally { output.destroy(); }
+    expect(review).toHaveBeenCalledOnce();
+  });
+
   it('rebuilds after default approval of overlapping model constituents and keeps the unselected suffix', async () => {
     const errors: unknown[] = [];
     const overlappingDetector: PiiDetectorApi = { ...detector,

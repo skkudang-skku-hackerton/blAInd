@@ -1,5 +1,6 @@
 import { buildReviewResult } from './policy';
 import { ensureAlertFonts } from './typography';
+import logoSvg from './assets/blaind-B-light.svg?raw';
 import { PII_LABELS as labels } from '../core/pii/preferences';
 import type { ApprovedReview, Detection, PrivacyAnalysis } from './types';
 
@@ -20,6 +21,9 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
   const document = host.ownerDocument;
   ensureAlertFonts(document);
   const { analysis, onComplete, onCancel } = options;
+  const automaticDetections = new Set(analysis.autoMaskedDetections);
+  const detections = [...analysis.autoMaskedDetections, ...analysis.confirmDetections]
+    .sort((a, b) => a.span.start - b.span.start || a.span.end - b.span.end);
   const previousFocus = document.activeElement as HTMLElement | null;
   const style = document.createElement('style');
   style.textContent = alertStyles;
@@ -35,10 +39,10 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     'keydown', 'keypress', 'keyup', 'input', 'change', 'focusin', 'focusout',
   ]) overlay.addEventListener(type, event => event.stopPropagation());
   overlay.innerHTML = `<section class="blaind-alert" role="dialog" aria-modal="true" aria-label="가릴 항목 선택" tabindex="-1">
-    <header class="blaind-alert-header"><div><p class="blaind-alert-eyebrow"><span class="blaind-alert-live-dot"></span> <span class="blaind-alert-logo">blAInd</span> <span class="blaind-alert-eyebrow-divider">/</span> PRIVACY CHECK</p></div></header>
+    <header class="blaind-alert-header"><p class="blaind-alert-eyebrow"><span class="blaind-alert-logo" role="img" aria-label="블라인드">${logoSvg}</span><span>개인정보 확인</span></p></header>
     <div class="blaind-alert-workspace">
       <section class="blaind-alert-preview" aria-label="보호할 내용">
-        <div class="blaind-alert-preview-legend"><span class="blaind-legend-auto">자동 보호</span><span class="blaind-legend-confirm">선택 가능</span><span class="blaind-legend-selected">선택한 항목</span></div>
+        <div class="blaind-alert-preview-legend"><span class="blaind-legend-confirm">선택 가능</span><span class="blaind-legend-selected">선택한 항목</span></div>
         <div class="blaind-alert-document" role="region" aria-label="보호할 내용 미리보기" tabindex="0"></div>
       </section>
       <fieldset class="blaind-alert-list"><legend>가릴 항목 선택</legend>
@@ -46,7 +50,7 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
         <div class="blaind-alert-items"></div>
       </fieldset>
     </div>
-    <footer class="blaind-alert-actions"><button type="button" class="blaind-alert-cancel">취소</button><div><button type="button" class="blaind-alert-keep">보호된 내용으로 진행</button><button type="button" class="blaind-alert-mask">선택 항목 가리고 진행</button></div></footer>
+    <footer class="blaind-alert-actions"><button type="button" class="blaind-alert-cancel">취소</button><div><button type="button" class="blaind-alert-keep">원문으로 진행</button><button type="button" class="blaind-alert-mask">선택 항목 가리고 진행</button></div></footer>
   </section>`;
   host.append(style, overlay);
   const dialog = overlay.querySelector<HTMLElement>('[role="dialog"]')!;
@@ -55,34 +59,35 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
   const selectAll = overlay.querySelector<HTMLInputElement>('.blaind-alert-select-all')!;
   const count = overlay.querySelector<HTMLElement>('.blaind-alert-selection-count')!;
   const preview = overlay.querySelector<HTMLElement>('.blaind-alert-document')!;
-  const fragments: { node: HTMLElement; original: string; automatic: boolean; indexes: number[] }[] = [];
+  const fragments: { node: HTMLElement; original: string; indexes: number[] }[] = [];
   const syncSelection = () => {
     const total = checkboxes.filter(input => input.checked).length;
     selectAll.checked = total > 0 && total === checkboxes.length;
     selectAll.indeterminate = total > 0 && total < checkboxes.length;
     count.textContent = `${total} / ${checkboxes.length}개 선택`;
     for (const fragment of fragments) {
-      const masked = fragment.automatic || fragment.indexes.some(index => checkboxes[index]!.checked);
-      fragment.node.dataset.state = fragment.automatic ? 'auto' : masked ? 'selected' : 'confirm';
+      const masked = fragment.indexes.some(index => checkboxes[index]!.checked);
+      fragment.node.dataset.state = masked ? 'selected' : 'confirm';
       fragment.node.textContent = masked ? '•'.repeat(Math.min(fragment.original.length, 12)) : fragment.original;
-      if (!fragment.automatic) fragment.node.setAttribute('aria-pressed', String(masked));
+      fragment.node.setAttribute('aria-pressed', String(masked));
     }
   };
   const setChecked = (index: number, checked: boolean) => {
     const input = checkboxes[index]!;
     if (input.checked === checked) return;
     input.checked = checked;
-    options.onSelectionChange?.(analysis.confirmDetections[index]!, checked);
+    options.onSelectionChange?.(detections[index]!, checked);
   };
   const highlight = (index: number | null) => {
     for (const fragment of fragments) fragment.node.classList.toggle('is-active', index !== null && fragment.indexes.includes(index));
   };
-  analysis.confirmDetections.forEach((detection, index) => {
-    const inputId = `blaind-confirm-${index}`;
+  detections.forEach((detection, index) => {
+    const inputId = `blaind-choice-${index}`;
     const row = document.createElement('label');
     row.className = 'blaind-alert-item';
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox'; checkbox.value = String(index);
+    checkbox.checked = automaticDetections.has(detection);
     checkboxes.push(checkbox);
     checkbox.addEventListener('change', () => { syncSelection(); options.onSelectionChange?.(detection, checkbox.checked); });
     checkbox.setAttribute('aria-label', `${labels[detection.type] ?? detection.type} 가리기`);
@@ -106,51 +111,46 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     checkboxes.forEach((_, index) => setChecked(index, checked));
     syncSelection();
   });
-  // Split at every boundary so overlapping detections preserve protection priority.
-  const detections = [...analysis.autoMaskedDetections, ...analysis.confirmDetections];
+  // Split at every boundary so overlapping checked items mask their combined coverage.
   const boundaries = [...new Set([0, analysis.originalText.length, ...detections.flatMap(d => [d.span.start, d.span.end])])].sort((a, b) => a - b);
   for (let i = 0; i < boundaries.length - 1; i++) {
     const start = boundaries[i]!, end = boundaries[i + 1]!;
     const original = analysis.originalText.slice(start, end);
-    const automatic = analysis.autoMaskedDetections.some(d => d.span.start < end && d.span.end > start);
-    const indexes = analysis.confirmDetections.flatMap((d, index) => d.span.start < end && d.span.end > start ? [index] : []);
-    if (!automatic && !indexes.length) { preview.append(document.createTextNode(original)); continue; }
-    const node = document.createElement(automatic ? 'mark' : 'button');
+    const indexes = detections.flatMap((d, index) => d.span.start < end && d.span.end > start ? [index] : []);
+    if (!indexes.length) { preview.append(document.createTextNode(original)); continue; }
+    const node = document.createElement('button');
     node.className = 'blaind-alert-highlight';
-    if (automatic) node.setAttribute('aria-label', '자동 보호된 정보');
-    else {
-      const button = node as HTMLButtonElement;
-      button.type = 'button';
-      button.setAttribute('aria-label', `${indexes.map(index => labels[analysis.confirmDetections[index]!.type] ?? analysis.confirmDetections[index]!.type).join(' · ')} 가리기 전환`);
-      button.addEventListener('click', () => {
-        const checked = !indexes.every(index => checkboxes[index]!.checked);
-        indexes.forEach(index => setChecked(index, checked));
-        syncSelection();
-        checkboxes[indexes[0]!]!.focus();
-        checkboxes[indexes[0]!]!.closest('label')?.scrollIntoView?.({ block: 'nearest' });
-      });
-    }
-    fragments.push({ node, original, automatic, indexes });
+    node.type = 'button';
+    node.setAttribute('aria-label', `${indexes.map(index => labels[detections[index]!.type] ?? detections[index]!.type).join(' · ')} 가리기 전환`);
+    node.addEventListener('click', () => {
+      const checked = !indexes.some(index => checkboxes[index]!.checked);
+      indexes.forEach(index => setChecked(index, checked));
+      syncSelection();
+      checkboxes[indexes[0]!]!.focus();
+      checkboxes[indexes[0]!]!.closest('label')?.scrollIntoView?.({ block: 'nearest' });
+    });
+    fragments.push({ node, original, indexes });
     preview.append(node);
   }
   if (!analysis.originalText) preview.textContent = '미리볼 내용이 없습니다.';
   syncSelection();
-  if (!analysis.hasConfirmItems) overlay.querySelector('.blaind-alert-list')?.remove();
+  if (!detections.length) overlay.querySelector('.blaind-alert-list')?.remove();
   const cancelButton = overlay.querySelector<HTMLButtonElement>('.blaind-alert-cancel')!;
   const keep = overlay.querySelector<HTMLButtonElement>('.blaind-alert-keep')!;
   const mask = overlay.querySelector<HTMLButtonElement>('.blaind-alert-mask')!;
-  if (!analysis.hasConfirmItems) mask.remove();
-  else keep.textContent = '선택 없이 진행';
+  if (!detections.length) mask.remove();
 
   let finished = false;
-  const finish = (selectedConfirm: readonly Detection[]) => {
+  const finish = (selectedDetections: readonly Detection[]) => {
     if (finished) return;
-    const result = buildReviewResult(analysis, selectedConfirm);
+    const result = buildReviewResult(analysis,
+      selectedDetections.filter(detection => !automaticDetections.has(detection)),
+      selectedDetections.filter(detection => automaticDetections.has(detection)));
     cleanup();
     onComplete(result);
   };
   const selected = () => checkboxes.filter(input => input.checked)
-    .map((input) => analysis.confirmDetections[Number(input.value)])
+    .map((input) => detections[Number(input.value)])
     .filter((detection): detection is Detection => detection !== undefined);
   const onKey = (event: KeyboardEvent) => {
     if (event.key === 'Escape') { event.preventDefault(); cancel(); }
@@ -201,38 +201,36 @@ const alertStyles = `
 }
 .blaind-alert-header { display: flex; align-items: center; gap: 14px; }
 .blaind-alert-eyebrow {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0;
-  color: #6F6F6B; font-size: 10px; font-weight: 500; line-height: 1.5; letter-spacing: .08em;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0;
+  color: #6F6F6B; font-size: 12px; font-weight: 500; line-height: 1.5;
 }
-.blaind-alert-logo { color: #191919; font-family: "IBM Plex Mono", monospace; font-weight: 700; letter-spacing: -.03em; }
-.blaind-alert-eyebrow, .blaind-alert-selection-count, .blaind-alert-value, .blaind-alert-kind { font-family: "IBM Plex Mono", "IBM Plex Sans KR", monospace; font-weight: 500; }
-.blaind-alert-live-dot { width: 6px; height: 6px; border-radius: 50%; background: #191919; }
-.blaind-alert-eyebrow-divider { color: #E7E7E3; }
-.blaind-alert-workspace { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); gap: 24px; margin-top: 24px; }
+.blaind-alert-logo { display: block; width: 94px; flex: none; }
+.blaind-alert-logo svg { display: block; width: 100%; height: auto; }
+.blaind-alert-selection-count, .blaind-alert-value, .blaind-alert-kind { font-family: "IBM Plex Mono", "IBM Plex Sans KR", monospace; font-weight: 500; }
+.blaind-alert-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 260px); gap: 20px; margin-top: 20px; }
 .blaind-alert-preview { min-width: 0; padding: 18px; border: 1px solid #E7E7E3; border-radius: 12px; background: #FCFCFB; }
 .blaind-alert-preview-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 14px; font-size: 11px; color: #6F6F6B; }
 .blaind-alert-preview-legend span:before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
-.blaind-legend-auto:before { background: #ECECE9; }
 .blaind-legend-confirm:before { background: #F4F3EE; border: 1px dashed #6F6F6B; }
 .blaind-legend-selected:before { background: #191919; border: 1px solid #191919; }
 .blaind-alert-document { max-height: 42vh; min-height: 220px; overflow: auto; padding: 22px; border: 1px solid #E7E7E3; border-radius: 8px; background: #FFFFFF; color: #191919; font-size: 14px; line-height: 2; white-space: pre-wrap; overflow-wrap: anywhere; }
 .blaind-alert-document:focus-visible { outline: 2px solid #191919; outline-offset: 2px; }
 .blaind-alert-list { min-width: 0; margin: 0; padding: 0; border: 0; }
 .blaind-alert-workspace:not(:has(.blaind-alert-list)) { grid-template-columns: minmax(0, 1fr); }
-.blaind-alert-selection-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; padding: 0 8px 12px; border-bottom: 1px solid #E7E7E3; font-size: 13px; }
-.blaind-alert-selection-toolbar label { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.blaind-alert-selection-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; padding: 0 4px 10px; border-bottom: 1px solid #E7E7E3; font-size: 12px; }
+.blaind-alert-selection-toolbar label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .blaind-alert-select-all { width: 18px; height: 18px; margin: 0; accent-color: #191919; }
 .blaind-alert-select-all:focus-visible { outline: 2px solid #191919; outline-offset: 2px; }
-.blaind-alert-selection-count { color: #6F6F6B; font-size: 12px; }
+.blaind-alert-selection-count { color: #6F6F6B; font-size: 11px; white-space: nowrap; }
 .blaind-alert-list legend { margin-bottom: 10px; color: #191919; font-size: 13px; font-weight: 500; }
 .blaind-alert-items { display: grid; gap: 8px; max-height: 46vh; overflow: auto; padding: 4px; margin: -4px; }
-.blaind-alert-item { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px 8px; border: 0; background: transparent; cursor: pointer; }
+.blaind-alert-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 4px; border: 0; background: transparent; cursor: pointer; }
 .blaind-alert-item:hover { background: transparent; }
 .blaind-alert-item:has(input:checked) { background: transparent; }
 .blaind-alert-item:focus-within { outline: 2px solid #191919; outline-offset: 2px; }
 .blaind-alert-item input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: #191919; }
-.blaind-alert-item-copy { display: flex; align-items: baseline; gap: 16px; min-width: 0; flex: 1; }
-.blaind-alert-kind { flex: none; font-size: 12px; font-weight: 500; color: #6F6F6B; }
+.blaind-alert-item-copy { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.blaind-alert-kind { overflow-wrap: anywhere; font-size: 12px; font-weight: 500; color: #6F6F6B; }
 .blaind-alert-value { overflow-wrap: anywhere; white-space: pre-wrap; color: #191919; font-size: 14px; line-height: 1.5; }
 .blaind-alert-actions {
   display: flex; justify-content: space-between; align-items: center; gap: 10px;
@@ -251,7 +249,6 @@ const alertStyles = `
 .blaind-alert .blaind-alert-mask { border-color: #191919; background: #191919; color: #FFFFFF; }
 .blaind-alert .blaind-alert-mask:hover { border-color: #191919; background: #191919; opacity: .9; }
 .blaind-alert .blaind-alert-highlight { display: inline; min-height: 0; padding: 0 3px; border: 0; border-radius: 3px; font: inherit; line-height: 1.4; color: #191919; background: #F4F3EE; border-bottom: 1px dashed #6F6F6B; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
-.blaind-alert .blaind-alert-highlight[data-state="auto"] { color: #6F6F6B; background: #ECECE9; border-bottom: 1px solid #ECECE9; }
 .blaind-alert .blaind-alert-highlight[data-state="selected"] { color: #FFFFFF; background: #191919; border-bottom: 1px solid #191919; }
 .blaind-alert button.blaind-alert-highlight:hover { background: #ECECE9; }
 .blaind-alert button.blaind-alert-highlight[data-state="selected"]:hover { background: #191919; color: #FFFFFF; }

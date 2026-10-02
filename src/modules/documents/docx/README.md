@@ -30,8 +30,9 @@ const processors = { pdf: processPdf, docx: processDocx };
   Detector 원본 결과는 수정하지 않습니다. signal은 별도 호출 컨텍스트입니다.
 - 공유 review 검증은 `segmentId + type + span`으로 항목을 연결하고 `autoMask`,
   `confirm.masking`, `confirm.nonMasking`을 모두 검증합니다. `requestId`·`itemId`는 없습니다.
-- 자동 마스킹 누락, 중복, 잘못된 그룹, 원문과 다른 word/span은 처리를 보류합니다.
-  마스킹과 명시적 원문 유지 구간이 겹쳐도 임의의 우선순위를 적용하지 않고 보류합니다.
+- 자동 마스킹 항목도 확인창에서 체크를 해제할 수 있으며, 해제한 항목은 `confirm.nonMasking`으로 전달합니다.
+  항목 누락, 중복, 잘못된 마스킹 그룹, 원문과 다른 word/span은 처리를 보류합니다.
+  선택한 마스킹과 원문 유지 구간이 겹치면 공유 문자만 마스킹하고 원문 유지 항목의 단독 영역은 유지합니다.
 - 사용자 취소는 재생성을 호출하지 않습니다. 오류·취소는 `null`이며 원본 파일을 반환하지 않습니다.
 - 탐지가 없거나 모두 원문 유지여도 승인이 필요하며 승인 후 재생성합니다.
 - 출력 파일명은 `masked-document.docx`, MIME은

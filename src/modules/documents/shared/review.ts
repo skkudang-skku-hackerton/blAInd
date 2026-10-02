@@ -68,13 +68,13 @@ export function resolveReview(request: AlertReviewRequest, decision: AlertReview
   for (const [items, policy, mask] of [
     [decision.autoMask, 'AUTO_MASK', true],
     [decision.confirm.masking, 'CONFIRM', true],
-    [decision.confirm.nonMasking, 'CONFIRM', false],
+    [decision.confirm.nonMasking, null, false],
   ] as const) {
     if (!Array.isArray(items)) throw new Error('Invalid review group');
     for (const item of items) {
       const identity = key(item);
       const original = expected.get(identity);
-      if (!original || preferences[original.type] !== policy || item.word !== original.word) {
+      if (!original || (policy !== null && preferences[original.type] !== policy) || item.word !== original.word) {
         throw new Error('Unknown, duplicate, or incorrectly grouped review item');
       }
       expected.delete(identity);
@@ -82,7 +82,7 @@ export function resolveReview(request: AlertReviewRequest, decision: AlertReview
     }
   }
   if (expected.size) throw new Error('Review omitted detections');
-  // nonMasking adds no mask; it cannot veto automatic or explicitly selected
+  // nonMasking adds no mask for either policy; it cannot veto selected
   // protection over shared characters. Do not extend masks into its exclusive
   // coverage. This matches the text processor's selected-span union policy.
   return request.segments.map(({ id }) => ({ segmentId: id, spans: mergeSpans(selected.get(id) ?? []) }));

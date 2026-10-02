@@ -150,8 +150,8 @@ test('real extension: status clicks, isolated review, approve and cancel', async
       await driver.click('[data-blaind-notice] >>> button');
       await driver.click('#start');
       await expect.poll(() => driver.reviewVisible()).toBe(true);
-      await driver.click('h2', true);
-      await driver.click('input[type=checkbox]', true);
+      await driver.click('.blaind-alert-header', true);
+      await driver.click('input[aria-label="이름 가리기"]', true);
       await expect.poll(() => driver.evaluate('return !!document.querySelector("#upload-menu")')).toBe(true);
       if (action === 'navigate') await driver.evaluate('history.pushState({}, "", "/app/other")');
       else await driver.click(action === 'approve' ? '.blaind-alert-mask' : '.blaind-alert-cancel', true);

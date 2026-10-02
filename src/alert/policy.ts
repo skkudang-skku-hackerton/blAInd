@@ -28,9 +28,15 @@ export function analyzeDetections(text: string, detections: Detection[], segment
 }
 
 /** Returns decisions for a processor; does not modify the original text. */
-export function buildReviewResult(analysis: PrivacyAnalysis, selectedConfirm: readonly Detection[] = []): ApprovedReview {
+export function buildReviewResult(
+  analysis: PrivacyAnalysis,
+  selectedConfirm: readonly Detection[] = [],
+  selectedAuto: readonly Detection[] = analysis.autoMaskedDetections,
+): ApprovedReview {
   const selected = new Set(selectedConfirm);
-  if (selectedConfirm.some(item => !analysis.confirmDetections.includes(item))) {
+  const selectedDefaults = new Set(selectedAuto);
+  if (selectedConfirm.some(item => !analysis.confirmDetections.includes(item))
+    || selectedAuto.some(item => !analysis.autoMaskedDetections.includes(item))) {
     throw new Error('Selected item does not belong to this review');
   }
   const item = (detection: Detection) => ({
@@ -41,10 +47,13 @@ export function buildReviewResult(analysis: PrivacyAnalysis, selectedConfirm: re
   });
   return {
     status: 'approved',
-    autoMask: analysis.autoMaskedDetections.map(item),
+    autoMask: analysis.autoMaskedDetections.filter(detection => selectedDefaults.has(detection)).map(item),
     confirm: {
       masking: analysis.confirmDetections.filter(detection => selected.has(detection)).map(item),
-      nonMasking: analysis.confirmDetections.filter(detection => !selected.has(detection)).map(item),
+      nonMasking: [
+        ...analysis.confirmDetections.filter(detection => !selected.has(detection)),
+        ...analysis.autoMaskedDetections.filter(detection => !selectedDefaults.has(detection)),
+      ].map(item),
     },
   };
 }

@@ -13,6 +13,33 @@ const regions = (detections: Detection[]) => deduplicateDetections(detections.ma
 const finalText = (analysis: ReturnType<typeof analyzeDetections>, selected: readonly Detection[] = []) =>
   applyMasking(analysis.originalText, [...analysis.autoMaskedDetections, ...selected]);
 
+describe('editable default masking decisions', () => {
+  it('keeps automatic defaults unless explicitly deselected and includes every unchecked item', () => {
+    const analysis = analyzeDetections('김민수 010-1234-5678', [
+      detection(0, 3, 'PERSON'), detection(4, 17, 'PHONE'),
+    ]);
+    const snapshot = structuredClone(analysis);
+    expect(buildReviewResult(analysis).autoMask.map(item => item.type)).toEqual(['PHONE']);
+    const decision = buildReviewResult(analysis, analysis.confirmDetections, []);
+    expect(decision.autoMask).toEqual([]);
+    expect(decision.confirm.masking.map(item => item.type)).toEqual(['PERSON']);
+    expect(decision.confirm.nonMasking).toEqual([
+      { segmentId: 'text', type: 'PHONE', span: { start: 4, end: 17 }, word: '010-1234-5678' },
+    ]);
+    expect(buildReviewResult(analysis, [], []).confirm.nonMasking.map(item => item.type)).toEqual(['PERSON', 'PHONE']);
+    expect(analysis).toEqual(snapshot);
+  });
+
+  it('rejects selected detections from another policy or review', () => {
+    const analysis = analyzeDetections('김민수 010-1234-5678', [
+      detection(0, 3, 'PERSON'), detection(4, 17, 'PHONE'),
+    ]);
+    expect(() => buildReviewResult(analysis, [analysis.autoMaskedDetections[0]!])).toThrow('does not belong');
+    expect(() => buildReviewResult(analysis, [], [analysis.confirmDetections[0]!])).toThrow('does not belong');
+    expect(() => buildReviewResult(analysis, [], [detection(4, 17, 'PHONE')])).toThrow('does not belong');
+  });
+});
+
 describe('selected-span union masking', () => {
   it.each([
     ['partial overlap across types', [detection(0, 5), detection(3, 10, 'PHONE')], '[RRN_1]'],
@@ -101,14 +128,17 @@ describe('merged model regions → policy → masking', () => {
     ['contained keep', detection(0, 10, 'PHONE'), detection(3, 5, 'PERSON')],
     ['identical spans with conflicting types', detection(0, 10, 'PHONE'), detection(0, 10, 'GENERIC_ID')],
     ['selected Confirm', detection(0, 5, 'PERSON'), detection(3, 10, 'PERSON')],
+    ['unchecked Auto Mask', detection(0, 5, 'PERSON'), detection(3, 10, 'PHONE')],
+    ['two Auto Mask items', detection(0, 5, 'RRN'), detection(3, 10, 'PHONE')],
     ['adjacent spans', detection(0, 5, 'PHONE'), detection(5, 10, 'PERSON')],
   ] as const)('resolves document %s without extending masks into unselected-only coverage', (_, masked, kept) => {
     const text = 'abcdefghij';
     const detections = regions([masked, kept]);
     const analysis = analyzeDetections(text, detections, 's');
-    const selected = analysis.confirmDetections.filter(d =>
-      d.type === masked.type && d.span.start === masked.span.start && d.span.end === masked.span.end);
-    const decision = buildReviewResult(analysis, selected);
+    const isSelected = (d: Detection) =>
+      d.type === masked.type && d.span.start === masked.span.start && d.span.end === masked.span.end;
+    const decision = buildReviewResult(analysis,
+      analysis.confirmDetections.filter(isSelected), analysis.autoMaskedDetections.filter(isSelected));
     expect(decision.confirm.nonMasking).toHaveLength(1);
     const request = createReviewRequest([{ id: 's', text }, { id: 'other', text }], [
       { segmentId: 's', detections }, { segmentId: 'other', detections: [] },
