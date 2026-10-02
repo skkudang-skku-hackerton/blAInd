@@ -1,5 +1,6 @@
 import { analyzeDetections } from '../policy';
 import { mountPrivacyAlert } from '../PrivacyAlert';
+import { ensureAlertFonts } from '../typography';
 import { sampleDetections, sampleText } from './sample';
 import type { Detection, ReviewResult } from '../types';
 
@@ -20,17 +21,18 @@ export function mountMockAlertPreview(): () => void {
 
   const mount = () => {
     if (disposed || !document.body) return;
+    ensureAlertFonts(document);
     host = document.createElement('div');
     host.dataset.blaindMockAlert = 'true';
 
     const panel = document.createElement('section');
     panel.setAttribute('aria-label', 'blAInd Alert 테스트');
-    panel.style.cssText = 'position:fixed;bottom:20px;left:20px;z-index:2147483646;max-width:min(380px,calc(100vw - 40px));padding:14px;border:1px solid #53689e;border-radius:14px;background:#17223a;color:#edf2ff;font:13px/1.6 system-ui,sans-serif;box-shadow:0 8px 28px #0004;';
+    panel.style.cssText = 'position:fixed;bottom:20px;left:20px;z-index:2147483646;max-width:min(380px,calc(100vw - 40px));padding:14px;border:1px solid #e4e4e4;border-radius:12px;background:#fff;color:#3f3f3f;font:400 13px/1.6 "blAInd Numerals","IBM Plex Sans KR",sans-serif;';
 
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = 'blAInd · 목업 Alert 열기';
-    button.style.cssText = 'display:block;padding:10px 14px;border:0;border-radius:9px;background:#526ff0;color:white;font:600 13px system-ui,sans-serif;cursor:pointer;';
+    button.style.cssText = 'display:block;padding:10px 14px;border:0;border-radius:8px;background:#181818;color:white;font:500 13px "IBM Plex Mono","IBM Plex Sans KR",monospace;cursor:pointer;';
 
     const result = document.createElement('p');
     result.setAttribute('role', 'status');
