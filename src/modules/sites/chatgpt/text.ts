@@ -8,4 +8,15 @@ const editorSelector = [
   '[role="textbox"][contenteditable]',
 ].join(', ');
 
-export const chatgptTextAdapter = createDomTextAdapter('chatgpt', editorSelector);
+const sendButtonSelector = [
+  'button[data-testid="send-button"]',
+  'button#composer-submit-button',
+  'button[aria-label="Send prompt" i]',
+  'button[aria-label="Send message" i]',
+  'button[aria-label="Send" i]',
+  'button[aria-label="프롬프트 보내기"]',
+  'button[aria-label="메시지 보내기"]',
+  'button[aria-label="보내기"]',
+].join(', ');
+
+export const chatgptTextAdapter = createDomTextAdapter('chatgpt', editorSelector, sendButtonSelector);

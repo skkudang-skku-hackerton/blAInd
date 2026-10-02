@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "wxt",
     "build": "wxt build",
-    "test": "node --experimental-strip-types --test --experimental-test-isolation=none tests/unit/enter-interceptor.test.mjs",
+    "test": "node --experimental-strip-types --test --experimental-test-isolation=none tests/unit/text-submit-interceptor.test.mjs",
     "typecheck": "wxt prepare && tsc --noEmit",
     "postinstall": "wxt prepare"
   },

@@ -1,7 +1,7 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { createHoldNotice } from '../../features/review/hold-notice';
 import { getTextSiteAdapter } from '../../modules/sites/text-adapters';
-import { createTextEnterInterceptor } from '../../modules/text';
+import { createTextSubmitInterceptor } from '../../modules/text';
 import { requestBackgroundStatus } from '../../shared/messaging/client';
 import { getRegisteredSite, REGISTERED_SITE_MATCHES } from '../../sites/registry';
 
@@ -21,18 +21,19 @@ export default defineContentScript({
     console.info(`[blAInd] Content Script ready: ${site.name}`);
 
     const notice = createHoldNotice();
-    const interceptor = createTextEnterInterceptor({
+    const interceptor = createTextSubmitInterceptor({
       adapter: getTextSiteAdapter(site.id),
-      onIntercept({ text }) {
-        console.info(`[blAInd] Enter intercepted: ${site.name}`, { length: text.length });
-        notice.show('Enter 전송을 보류했습니다. 입력 내용은 유지되며, 개인정보 검사는 아직 실행되지 않았습니다.');
+      onIntercept({ text, source }) {
+        const action = source === 'enter' ? 'Enter' : 'Send button';
+        console.info(`[blAInd] ${action} intercepted: ${site.name}`, { length: text.length });
+        notice.show('전송을 보류했습니다. 입력 내용은 유지되며, 개인정보 검사는 아직 실행되지 않았습니다.');
       },
       onError() {
-        console.error(`[blAInd] Enter interception failed: ${site.name}`);
+        console.error(`[blAInd] Text send interception failed: ${site.name}`);
         notice.show('입력 내용을 확인하지 못해 전송을 보류했습니다.');
       },
     });
-    // Background 응답을 기다리는 동안에도 Enter 전송을 잡습니다.
+    // Background 응답을 기다리는 동안에도 Enter와 버튼 전송을 잡습니다.
     interceptor.start();
     ctx.onInvalidated(() => {
       interceptor.stop();
