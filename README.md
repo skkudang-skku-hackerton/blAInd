@@ -58,7 +58,7 @@ npm run build
 
 배포 전 검증과 두 브라우저 빌드는 `npm ci` 후 `npm run build:release`로 실행합니다.
 이 명령은 타입 검사와 두 단위 테스트 모음을 통과한 뒤 Chrome과 Firefox를 빌드합니다.
-`npm run build`는 빠른 Chrome 번들 생성용이며 타입 검사나 테스트를 실행하지 않습니다.
+`npm run build`는 Chrome과 Firefox 번들을 생성하며 타입 검사나 테스트를 실행하지 않습니다.
 ONNX Runtime은 외부 ESM/WASM 파일을 확장 내부 `ort-wasm/`에서 로드합니다.
 Chrome은 WASM과 WebGPU용 Asyncify 런타임을 포함하고 Firefox는 WASM 런타임만 포함합니다.
 
@@ -245,6 +245,11 @@ PDF, DOCX, TXT/Markdown 모듈을 제공하며 이후 HWPX로 확장할 계획�
 `npm test`는 Node.js 기본 테스트 러너와 LinkeDOM으로 Enter·클릭 보류, 버튼과 입력창의 연결, 한글 조합·줄바꿈 분기, 반복 입력, SPA 입력 영역 교체, 리스너 수명과 오류 시 보류를 검증합니다. 테스트는 같은 프로세스에서 실행합니다. LinkeDOM이 구현하지 않는 capture 순서·기본 form 제출과 실제 사이트 전송 여부는 Chrome에서 확인합니다. 이후 동의 전 전송·원본 업로드 방지, 승인된 내용의 한 번만 전송, 입력·첨부 변경 시 재검사, 재생성 파일의 개인정보 잔존 여부 등을 추가로 검증합니다.
 
 ## 브라우저 빌드
+
+CI는 push와 pull request에서 타입 검사, 단위 테스트, 두 브라우저 ZIP 생성을 실행합니다.
+`v<package.json 버전>` 태그를 push하면 GitHub Release에 Chrome/Firefox 패키지와
+Firefox 리뷰용 소스 ZIP을 첨부합니다. Chrome Web Store 및 Firefox Add-ons 자동 배포를
+활성화하는 방법과 필요한 Secrets는 [CI/CD 및 릴리스 가이드](docs/releases.md)를 참고하세요.
 
 ```sh
 npm run build:chrome   # Chrome Manifest V3, offscreen inference host

@@ -5,6 +5,10 @@ import { resolve } from 'node:path';
 export default defineConfig({
   srcDir: 'src',
   modules: ['@wxt-dev/module-react'],
+  zip: {
+    // Keep Mozilla's review archive limited to reproducible build inputs.
+    includeSources: ['src/**', 'package.json', 'package-lock.json', 'tsconfig.json', 'wxt.config.ts', 'SOURCE_CODE_REVIEW.md'],
+  },
   // Load ORT's external ESM/WASM assets from /ort-wasm/ instead of also
   // embedding them in Vite's bundles. Workers have their own resolver.
   vite: () => ({
