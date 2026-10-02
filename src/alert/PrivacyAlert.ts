@@ -71,7 +71,10 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
 
   const finish = (text: string) => { cleanup(); onComplete(text); };
   const selected = () => [...items.querySelectorAll<HTMLInputElement>('input:checked')]
-    .map((input) => analysis.confirmDetections[Number(input.value)]);
+    .flatMap((input) => {
+      const detection = analysis.confirmDetections[Number(input.value)];
+      return detection ? [detection] : [];
+    });
   const onKey = (event: KeyboardEvent) => {
     if (event.key === 'Escape') { event.preventDefault(); cancel(); }
     if (event.key === 'Tab') {
