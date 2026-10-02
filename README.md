@@ -12,7 +12,36 @@ AI 웹사이트에 질문을 보내기 전에 개인정보를 감지하고, 사�
 
 모델 개발은 별도 레포에서 진행합니다. 이 레포는 전달받은 모델과 토크나이저를 브라우저에서 실행하고, 탐지 결과를 마스킹 및 전송 흐름에 연결합니다. 브라우저 실행 호환성은 실제 모델 연결 단계에서 확인합니다.
 
-모델 라이브러리 API는 `docs/pii-detection-model-api.md`를 참고해주세요.
+모델 라이브러리 API는 `docs/pii-detection-model-api.md`를 참고해주세요. 브라우저 검증 절차와 실행 기록은 `docs/pii-model-verification.md`에 있습니다.
+
+### PII 탐지기 사용
+
+공개 진입점은 `src/core/api/index.ts`입니다. 다른 모듈은 내부 RPC/ONNX 구현을 몰라도 아래처럼 사용합니다.
+
+```ts
+import { createPiiDetectorClient, PiiError } from '../../core/api';
+
+const detector = createPiiDetectorClient();
+await detector.initialize();
+
+// 짧은 입력
+const detections = await detector.scanText(text);
+
+// 문서 모듈이 나눈 세그먼트 (PDF page, DOCX paragraph 등)
+const results = await detector.scanSegments(segments);
+
+// 요청별 취소 (전송 흐름에서 전달받은 signal을 그대로 전달)
+const controller = new AbortController();
+try {
+  const cancelled = await detector.scanSegments(segments, { signal: controller.signal });
+} catch (error) {
+  if (error instanceof PiiError && error.code === 'CANCELLED') {
+    // 원본을 전송하지 않고 중단
+  } else throw error;
+}
+```
+
+`initialize()`는 자동으로 호출되므로 먼저 부르지 않아도 됩니다. 모델 다운로드 진행 상태는 `detector.onStatus(listener)`로 구독할 수 있고, `detector.dispose()`는 이 클라이언트의 리스너와 대기 요청만 정리하며 공유 모델은 내려가지 않습니다.
 
 `public/models/`의 모델 파일은 `.gitignore`로 제외합니다. 모델 연결 단계에서 사용할 버전과 파일을 가져오는 방법을 정합니다.
 
