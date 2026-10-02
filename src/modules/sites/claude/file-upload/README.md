@@ -60,7 +60,7 @@ export type DocumentProcessorRegistry = Partial<Record<DocumentKind, DocumentPro
 | `event-guard.ts` | 재발행 이벤트를 후킹이 다시 잡지 않게 표시 (무한 루프 방지) |
 | `file-injector.ts` | `DataTransfer`로 FileList 교체, change/drop 재발행 |
 | `dom-interceptor.ts` | change/drop/paste capture 후킹, 분류·위임·재주입 (1차 방어선) |
-| `processing-indicator.ts` | 처리 중 "검사 중" 오버레이 UI (Shadow DOM, 사이트 CSS와 격리) |
+| `processing-indicator.ts` | 화면 중앙 로고 애니메이션·문서명 처리 안내 (Shadow DOM, 사이트 CSS와 격리) |
 | `network-guard.ts` | fetch/XHR 감시, DOM 우회 업로드 탐지 (2차 방어선, 보조) |
 | `index.ts` | 공개 API |
 
@@ -88,7 +88,9 @@ interceptor.start();
 
 ## 처리 중 UI
 
-파일을 문서 모듈이 처리하는 동안 사용자에게 "검사 중"임을 보여주는 오버레이다.
+파일을 문서 모듈이 처리하는 동안 화면 정중앙에 큰 로고 애니메이션을 표시한다.
+내부 프레임 없이 로고 아래에 `계약서.pdf 처리 중…`처럼 문서명과 처리 상태 한 문구만 보여준다.
+여러 파일은 `계약서.pdf 외 2개 처리 중…`로 표시한다.
 `dom-interceptor`가 자동으로 띄우고 숨긴다.
 
 - **Shadow DOM**으로 렌더링해 Claude CSS와 충돌하지 않는다.
@@ -98,6 +100,8 @@ interceptor.start();
 
 ### 문구/동작 커스터마이즈
 
+`labels.files`는 파일명이 없을 때만 적용한다. 파일명이 있으면 파일명 기반 안내를 사용한다.
+
 ```ts
 import { createProcessingIndicator } from '@/modules/sites/claude/file-upload';
 
@@ -105,11 +109,8 @@ const interceptor = createFileUploadInterceptor({
   processors: { pdf: processPdf },
   indicator: createProcessingIndicator({
     labels: {
-      title: '개인정보 검사 중',
       files: (n) => (n > 1 ? `첨부 ${n}개 처리 중` : '첨부 파일 처리 중'),
-      hint: '잠시만 기다려 주세요.',
     },
-    bottomOffsetPx: 120,
   }),
 });
 ```

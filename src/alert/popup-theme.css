@@ -95,3 +95,30 @@
 @media (prefers-reduced-motion: reduce) {
   .blaind-popup-button { transition: none; }
 }
+/* Loading mark: the logo's redaction bar sweeps over [AI], holds, then lifts. */
+.blaind-popup-logo-loading .blaind-logo-bar {
+  transform-box: fill-box;
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: blaind-logo-bar 2.4s cubic-bezier(.7, 0, .2, 1) infinite;
+}
+.blaind-popup-logo-loading .blaind-logo-bracket {
+  animation: blaind-logo-bracket 2.4s ease infinite;
+}
+@keyframes blaind-logo-bar {
+  0% { transform: scaleX(0); opacity: 1; }
+  30%, 75% { transform: scaleX(1); opacity: 1; }
+  92% { transform: scaleX(1); opacity: 0; }
+  100% { transform: scaleX(0); opacity: 0; }
+}
+@keyframes blaind-logo-bracket {
+  0%, 8% { opacity: 1; }
+  25%, 75% { opacity: 0; }
+  92%, 100% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .blaind-popup-logo-loading .blaind-logo-bar,
+  .blaind-popup-logo-loading .blaind-logo-bracket { animation: none; }
+  .blaind-popup-logo-loading .blaind-logo-bar { transform: none; }
+  .blaind-popup-logo-loading .blaind-logo-bracket { opacity: 0; }
+}
