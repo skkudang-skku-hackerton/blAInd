@@ -1,0 +1,28 @@
+# Dependencies and generated extension files
+node_modules/
+.wxt/
+.output/
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+.agents/
+.codex/
+.aws/
+
+# Downloaded model artifacts (managed in the model repository)
+public/models/*
+!public/models/.gitkeep
+
+# Editor, OS, and log files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log
