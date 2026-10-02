@@ -60,10 +60,12 @@ export default defineContentScript({
       onStage(stage: string) {
         documentStage = stage;
         if (stage === 'extracting') documentFailed = false;
+        if (stage === 'scanning' || stage === 'reviewing') {
+          notice.dispose();
+          return;
+        }
         const labels: Record<string, string> = {
           extracting: '문서에서 텍스트를 추출하고 있습니다. 업로드를 보류합니다.',
-          scanning: '문서의 개인정보를 검사하고 있습니다. 업로드를 보류합니다.',
-          reviewing: '확인 창에서 마스킹할 항목을 선택해 주세요.',
           rebuilding: '선택한 항목을 마스킹한 파일을 만들고 있습니다.',
         };
         notice.show(labels[stage] ?? '문서를 처리하고 있습니다.');
@@ -87,14 +89,13 @@ export default defineContentScript({
         pdf: createPdfProcessor({ ...documentOptions, openPdf: openPdfOffscreen }),
         docx: createDocxProcessor({ ...documentOptions, openDocx: openDocxOffscreen }),
       },
-      onProcessed() { notice.show(`검사가 끝난 파일을 ${site.name}에 첨부했습니다.`); },
+      onProcessed() { notice.dispose(); },
       onSkipped() {
         if (!documentFailed) notice.show('문서 업로드를 취소했습니다. 파일은 첨부되지 않았습니다.');
       },
       onError: documentOptions.onError,
     });
     fileInterceptor.start();
-    let downloadProgress = -1;
     const onScanError = (error: unknown) => {
       console.error(`[blAInd] PII scan failed: ${site.name}`, {
         code: error instanceof PiiError ? error.code : 'INFERENCE_FAILED',
@@ -120,7 +121,7 @@ export default defineContentScript({
         });
       },
       onCancelled() {
-        notice.show('확인을 취소했습니다. 입력은 유지되며 전송하지 않습니다.');
+        if (!fileInterceptor.isProcessing) notice.dispose();
       },
       onError: onScanError,
     });
@@ -130,7 +131,6 @@ export default defineContentScript({
       getPageUrl: () => window.location.href,
       onScanning({ text }) {
         review.close();
-        downloadProgress = -1;
         console.info(`[blAInd] PII scan started: ${site.name}`, { length: text.length });
         if (!fileInterceptor.isProcessing) notice.dispose();
       },
@@ -144,22 +144,8 @@ export default defineContentScript({
       onError: onScanError,
       onDiscarded() {
         review.close();
-        notice.show('입력 또는 대화가 변경되어 검사 결과를 폐기했습니다. 전송하려면 다시 검사해 주세요.');
+        if (!fileInterceptor.isProcessing) notice.dispose();
       },
-    });
-    const unsubscribeStatus = detector.onStatus(status => {
-      // 텍스트 검사는 조용히 진행하고, 문서 검사 진행 안내는 유지합니다.
-      if (!(fileInterceptor.isProcessing && documentStage === 'scanning')) return;
-      if (status.state === 'downloading') {
-        const progress = Math.round(status.progress * 100);
-        if (progress === downloadProgress) return;
-        downloadProgress = progress;
-        notice.show(`개인정보 검사 모델을 준비하고 있습니다 (${progress}%). 전송과 업로드는 보류됩니다.`);
-      } else if (status.state === 'loading') {
-        notice.show('개인정보 검사 모델을 불러오고 있습니다. 전송은 보류됩니다.');
-      } else if (status.state === 'ready') {
-        notice.show('입력한 내용에서 개인정보를 검사하고 있습니다. 전송은 보류됩니다.');
-      }
     });
     const interceptor = createTextSubmitInterceptor({
       adapter,
@@ -201,7 +187,6 @@ export default defineContentScript({
       sender.cancel();
       review.dispose();
       scanner.dispose();
-      unsubscribeStatus();
       detector.dispose();
       settings.dispose();
       notice.dispose();
