@@ -54,19 +54,28 @@ Claude의 선택자는 `.ProseMirror[contenteditable="true"]`, Gemini는 `rich-t
 - 빈 입력과 공백만 있는 입력, 채팅 선택자에 해당하지 않는 요소의 Enter는 통과시킵니다. 파일만 첨부된 메시지는 별도 문서 흐름의 대상입니다.
 - 읽기 또는 콜백 오류가 발생해도 원문을 자동 전송하지 않습니다.
 
-Content 진입점은 보류 안내를 띄우고 사이트명·글자 수만 콘솔에 기록합니다. 원문을 콘솔이나 Background 메시지에 넣지 않습니다. 안내의 닫기 버튼은 안내만 닫으며 질문을 보내지 않습니다.
+Content 진입점은 `features/review/text-scan.ts`의 검사 컨트롤러에 전송 시점의 원문을 전달합니다. 컨트롤러는 공개 모델 클라이언트의 `scanText(text, { signal })`을 호출하고 원문과 탐지 구간을 함께 `onResult`로 전달합니다. 완료된 결과는 `scanner.getResult()`로도 얻을 수 있습니다. 원문·URL·입력창·대화 ID가 변경된 결과는 폐기하며, 새 검사나 확장 무효화 시 이전 요청을 취소합니다.
 
-Ctrl/Alt/Meta+Enter에 의한 전송, 모델 분석, 선택 UI, 입력 교체·재전송은 후속 단계입니다. 사이트가 click 이전의 포인터 이벤트나 별도 경로로 전송하는 경우도 실제 페이지에서 확인해야 합니다.
+원문은 확장 내부 모델 요청에 사용하며 외부 추론 서버로 전송하지 않습니다. 콘솔에는 사이트명·글자 수·탐지 개수·유형만 기록하고 원문과 탐지된 값은 기록하지 않습니다. 안내에는 모델 준비·검사·완료·오류 상태가 표시됩니다. 탐지가 없어도 전송은 보류하며, 안내의 닫기 버튼은 안내만 닫습니다.
+
+Ctrl/Alt/Meta+Enter에 의한 전송, 선택 UI, 입력 교체·재전송은 후속 단계입니다. 사이트가 click 이전의 포인터 이벤트나 별도 경로로 전송하는 경우도 실제 페이지에서 확인해야 합니다.
 
 ## 확인
 
-`npm test`는 Node.js 기본 테스트 러너와 LinkeDOM으로 입력창·버튼 탐색, 이벤트 취소, IME 분기, 반복·수명 관리, 모호한 입력창과 오류 시 보류를 검증합니다. LinkeDOM은 브라우저의 capture 순서와 기본 form 제출을 구현하지 않으므로 실제 페이지의 전송 차단 여부는 Chrome에서 확인합니다.
+`npm test`는 Vitest로 검사 컨트롤러와 모델·메시지 모듈 등을 검증합니다. 기존 인터셉터 테스트는 다음 명령으로 별도 실행합니다.
+
+```sh
+node --experimental-strip-types --test --experimental-test-isolation=none tests/unit/text-submit-interceptor.test.mjs
+```
+
+LinkeDOM은 브라우저의 capture 순서와 기본 form 제출을 구현하지 않으므로 실제 페이지의 전송 차단 여부는 Chrome에서도 확인합니다.
 
 1. `npm run build` 후 확장과 AI 페이지를 새로고침합니다.
 2. 채팅 입력창에 테스트 문장을 쓰고 Enter를 누릅니다.
-3. 질문이 전송되지 않고 원문이 남으며, 보류 안내와 `[blAInd] Enter intercepted: <사이트명>` 로그가 나타나는지 확인합니다.
-4. 전송 버튼을 직접 눌러 같은 보류 안내와 `[blAInd] Send button intercepted: <사이트명>` 로그가 나타나는지 확인합니다. 아이콘을 눌러도 동일해야 합니다.
-5. Shift+Enter로 줄바꿈이 되고 한글 조합 확정이 유지되는지 확인합니다. 첨부·음성·생성 중지 버튼도 정상 동작해야 합니다.
-6. 새 대화로 이동해도 같은 동작인지 확인합니다.
+3. 질문이 전송되지 않고 원문이 남으며, 보류 안내와 `[blAInd] Enter intercepted: <사이트명>` 로그가 나타나는지 확인합니다. 최초 검사에서는 약 483 MB의 INT8 모델을 다운로드하므로 준비 시간이 필요합니다.
+4. `[blAInd] PII scan started` 이후 `PII scan completed`와 탐지 개수·유형을 확인합니다. 예: `김민수의 연락처는 010-1234-5678입니다.` 탐지된 항목 선택과 재전송은 아직 연결하지 않았으므로 완료 후에도 원문과 보류 상태가 유지됩니다.
+5. 전송 버튼을 직접 눌러 같은 검사 흐름과 `[blAInd] Send button intercepted: <사이트명>` 로그가 나타나는지 확인합니다. 아이콘을 눌러도 동일해야 합니다.
+6. Shift+Enter로 줄바꿈이 되고 한글 조합 확정이 유지되는지 확인합니다. 첨부·음성·생성 중지 버튼도 정상 동작해야 합니다.
+7. 검사 중 입력을 수정하거나 다른 대화로 이동하면 결과가 폐기되는지, 새 대화에서 다시 검사할 수 있는지 확인합니다.
 
 키보드 조합 여부는 [KeyboardEvent.isComposing](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/isComposing), 전파 차단은 [Event.stopImmediatePropagation](https://developer.mozilla.org/en-US/docs/Web/API/Event/stopImmediatePropagation)을 사용합니다.

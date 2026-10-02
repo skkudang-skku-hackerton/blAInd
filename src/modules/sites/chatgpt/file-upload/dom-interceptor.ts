@@ -54,7 +54,6 @@ export function createFileUploadInterceptor(
   const { processors } = options;
   const unhandledPolicy = options.unhandled ?? 'passthrough';
   const root: Document | ShadowRoot = options.root ?? document;
-  const eventRoot: EventTarget = options.root ?? document.defaultView ?? document;
   const ownsIndicator = options.indicator === undefined;
   const indicator: ProcessingIndicator | null =
     options.indicator === false
@@ -242,15 +241,6 @@ export function createFileUploadInterceptor(
     });
   }
 
-  // Native file selection emits input before change. Block that early event too.
-  function onInput(event: Event): void {
-    if (isInternalEvent(event)) return;
-    if (event.target instanceof HTMLInputElement && event.target.type === 'file' && event.target.files?.length) {
-      event.stopImmediatePropagation();
-      event.preventDefault();
-    }
-  }
-
   function onDrop(event: DragEvent): void {
     if (isInternalEvent(event)) return;
 
@@ -287,10 +277,9 @@ export function createFileUploadInterceptor(
     start(): void {
       if (started) return;
       started = true;
-      eventRoot.addEventListener('input', onInput, true);
-      eventRoot.addEventListener('change', onChange, true);
-      eventRoot.addEventListener('drop', onDrop as EventListener, true);
-      eventRoot.addEventListener('paste', onPaste as EventListener, true);
+      root.addEventListener('change', onChange, true);
+      root.addEventListener('drop', onDrop as EventListener, true);
+      root.addEventListener('paste', onPaste as EventListener, true);
       log('interceptor started');
     },
     stop(): void {
@@ -301,10 +290,9 @@ export function createFileUploadInterceptor(
       if (ownsIndicator) {
         indicator?.destroy();
       }
-      eventRoot.removeEventListener('input', onInput, true);
-      eventRoot.removeEventListener('change', onChange, true);
-      eventRoot.removeEventListener('drop', onDrop as EventListener, true);
-      eventRoot.removeEventListener('paste', onPaste as EventListener, true);
+      root.removeEventListener('change', onChange, true);
+      root.removeEventListener('drop', onDrop as EventListener, true);
+      root.removeEventListener('paste', onPaste as EventListener, true);
       log('interceptor stopped');
     },
     abort(): void {

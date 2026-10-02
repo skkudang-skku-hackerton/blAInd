@@ -1,8 +1,7 @@
 # PDF 문서 모듈
 
 사이트 업로더의 `(file: File, signal: AbortSignal) => Promise<File | null>` 계약을 구현합니다.
-ChatGPT 확장 진입점에서 파일 인터셉터, 실제 탐지기, 확인 모달에 연결되어 있습니다.
-실행 방법은 [`docs/pdf-manual-test.md`](../../../../docs/pdf-manual-test.md)를 참고하세요.
+`src/entrypoints/` 연결은 포함하지 않습니다.
 
 ## 연결
 
@@ -21,13 +20,16 @@ const processors = { pdf: processPdf };
 ```
 
 `alertClient`는 연결 예시의 의존성 이름이지 현재 제공되는 전역 객체가 아닙니다.
-`src/features/review/pdf-review.ts`가 여러 페이지의 탐지를 한 모달에 표시하고,
-원래 segmentId와 span을 보존해 세 그룹의 선택 결과를 반환합니다.
-동시 문서 요청의 모달은 순서대로 표시하며 취소 시 창과 대기 요청을 정리합니다.
-`src/shared/messaging/pdf-session.ts`는 PDF 세션을 offscreen에 유지하고,
-Chrome JSON 메시지로 입력과 출력 바이트를 전달합니다. 출력은 작은 청크로 나눕니다.
+현재 `src/alert/PrivacyAlert.ts`의
+`mountPrivacyAlert`는 최종 문자열을 반환하는 UI입니다. 문서의 다중 세그먼트·세 그룹
+계약을 구현한 프론트 호출 함수를 `review`에 연결해야 합니다. PDF 모듈이 최종 문자열에서
+사용자의 선택을 역추정하지 않습니다. 프론트는 여러 문서 요청을 순서대로 표시하고,
+각 호출의 signal이 취소되면 해당 창·대기 요청을 정리해야 합니다.
 
 ## API 준수
+
+Detector/Alert 데이터 타입, 승인 응답 검증, 취소 대기 헬퍼는 `../shared/`에 두고
+DOCX 모듈과 동일한 구현을 사용합니다. 기존 PDF 공개 타입과 함수는 유지합니다.
 
 - 코어 타입은 `src/core/api/`에서 가져옵니다. `initialize()` 후
   `scanSegments(segments, { signal })`만 사용합니다. Worker에 직접 추론을 요청하지 않습니다.
@@ -96,6 +98,5 @@ npx playwright test tests/e2e/pdf-module.spec.ts
 테스트는 실제 생성한 한글 PDF, 선택 구간 제거·원문 유지, 계약 위반 응답,
 취소와 늦은 승인, 파일·페이지 제한을 검증합니다. 브라우저 테스트는 Chromium에서
 번들된 Worker·WASM 로딩과 PDF 재생성을 검증하며 Playwright Chromium 설치가 필요합니다.
-`tests/e2e/pdf-extension.spec.ts`는 실제 MV3의 offscreen Worker, 모달 선택, 재첨부와 취소를
-검증합니다. `PDF_REAL_MODEL_E2E=1`이면 실제 모델과 production content script도 검증합니다.
-실제 ChatGPT 계정 화면의 DOM 호환성은 수동 업로드 테스트로 별도 확인해야 합니다.
+실제 사이트 업로드 E2E는
+entrypoint·코어·Alert 연결 이후 별도로 수행해야 합니다.
