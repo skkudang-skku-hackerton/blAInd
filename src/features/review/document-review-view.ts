@@ -1,6 +1,17 @@
 import { analyzeDetections, mountPrivacyAlert, type ReviewResult } from '../../alert';
 import type { AlertReviewDecision, AlertReviewRequest } from '../../modules/documents/shared/types';
 
+function documentLocationLabel(segmentId: string): string {
+  const match = /^docx:word\/(document|header(\d+)|footer(\d+)|footnotes|endnotes)\.xml:p(\d+)$/.exec(segmentId);
+  if (!match) return segmentId;
+  const [, part, header, footer, paragraph] = match;
+  const section = part === 'document' ? '본문'
+    : header ? `머리글 ${header}`
+    : footer ? `바닥글 ${footer}`
+    : part === 'footnotes' ? '각주' : '미주';
+  return `${section} · ${Number(paragraph) + 1}번째 문단`;
+}
+
 /** Render inside the extension page; translate combined UI spans back to segments. */
 export function mountDocumentReview(
   container: HTMLElement, request: AlertReviewRequest, onDecision: (result: AlertReviewDecision) => void,
@@ -29,7 +40,9 @@ export function mountDocumentReview(
   };
   return mountPrivacyAlert(container, {
     analysis: analyzeDetections(text, detections, 'document'),
-    itemContext: d => origins.get(JSON.stringify([d.type, d.span.start, d.span.end]))?.segmentId ?? '',
+    itemContext: d => documentLocationLabel(
+      origins.get(JSON.stringify([d.type, d.span.start, d.span.end]))?.segmentId ?? '',
+    ),
     onComplete: finish, onCancel: () => finish({ status: 'cancelled' }),
   });
 }
