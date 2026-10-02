@@ -4,6 +4,7 @@ import { openPdfInWorker } from '../../modules/documents/pdf/worker-client';
 import { openDocxInWorker } from '../../modules/documents/docx/worker-client';
 import { DEFAULT_LIMITS as PDF_LIMITS, type PdfSession } from '../../modules/documents/pdf/types';
 import { DEFAULT_LIMITS as DOCX_LIMITS } from '../../modules/documents/docx/types';
+import { documentErrorCode } from '../../modules/documents/shared/errors';
 
 export function installDocumentServer(runtime: MessagingRuntime): () => void {
   const sessions = new Map<string, { controller: AbortController; chunks: Uint8Array[];
@@ -68,7 +69,11 @@ export function installDocumentServer(runtime: MessagingRuntime): () => void {
       finally { state.busy = false; }
     };
     void execute().then(result => respond({ ok: true, ...result }),
-      () => respond({ ok: false, error: 'Document processing failed. The original file was held.' }));
+      error => {
+        const code = documentErrorCode(error);
+        console.error('[blAInd] Document host failed', { operation: m.op, kind: m.kind, code });
+        respond({ ok: false, code });
+      });
     return true;
   };
   runtime.onMessage.addListener(listener);

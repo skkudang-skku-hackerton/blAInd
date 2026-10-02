@@ -2,6 +2,7 @@ import { browser } from 'wxt/browser';
 import type { OpenPdf, PdfSession } from '../../modules/documents/pdf/types';
 import type { OpenDocx } from '../../modules/documents/docx/types';
 import { abortable } from '../../modules/documents/shared/abortable';
+import { DocumentProcessingError, isDocumentErrorCode } from '../../modules/documents/shared/errors';
 
 export const DOCUMENT_CHANNEL = 'blaind:documents';
 export const CHUNK_BYTES = 512 * 1024;
@@ -22,7 +23,7 @@ function createDocumentOpener(kind: 'pdf' | 'docx'): (bytes: ArrayBuffer, limits
     const send = async (op: string, payload: object = {}) => {
       const reply = await browser.runtime.sendMessage({ channel: DOCUMENT_CHANNEL,
         target: 'background', sessionId, kind, op, ...payload });
-      if (!reply?.ok) throw new Error(reply?.error ?? 'Document host unavailable');
+      if (!reply?.ok) throw new DocumentProcessingError(isDocumentErrorCode(reply?.code) ? reply.code : 'DOCUMENT_WORKER');
       return reply;
     };
     let closed = false;

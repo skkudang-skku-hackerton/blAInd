@@ -4,6 +4,7 @@ import { createHoldNotice } from '../../features/review/hold-notice';
 import { createDocumentReview } from '../../features/review/document-review';
 import { createPdfProcessor } from '../../modules/documents/pdf';
 import { createDocxProcessor } from '../../modules/documents/docx';
+import { documentErrorNotice, documentErrorCode } from '../../modules/documents/shared/errors';
 import { createFileUploadInterceptor } from '../../modules/sites/chatgpt/file-upload';
 import { openPdfOffscreen, openDocxOffscreen } from '../../shared/messaging/document-client';
 import { createTextScanController } from '../../features/review/text-scan';
@@ -48,8 +49,11 @@ export default defineContentScript({
       },
       onError(error: unknown) {
         documentFailed = true;
-        console.error('[blAInd] Document processing failed', error);
-        notice.show('문서 처리에 실패해 업로드를 중단했습니다. 원본은 첨부되지 않았습니다.');
+        console.error('[blAInd] Document processing failed', {
+          stage: documentStage,
+          code: error instanceof PiiError ? error.code : documentErrorCode(error),
+        }, error);
+        notice.show(`${documentErrorNotice(error)} 원본은 첨부되지 않았습니다.`);
       },
     };
     const fileInterceptor = site.id === 'chatgpt' ? createFileUploadInterceptor({

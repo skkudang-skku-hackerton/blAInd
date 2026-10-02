@@ -25,7 +25,17 @@
 DOCX 처리기에서 거부됩니다. 실패하거나 대화가 바뀌면 원본 대신 첨부하지 않습니다.
 다른 파일 형식에는 기존 인터셉터의 passthrough 정책이 적용됩니다.
 
+`npm run dev`에서도 offscreen 문서 처리 코드는 확장 내부에 번들링됩니다.
+개발 서버에서 직접 Worker를 로드할 때 발생하는 출처/CSP 문제를 피하기 위해
+offscreen HTML의 main 스크립트에 `wxt-ignore`를 사용합니다.
+개발 모드 테스트는 `npm run dev`를 재시작하고 `.output/chrome-mv3-dev` 확장 및
+ChatGPT 탭을 새로고침한 뒤 진행합니다.
+실패 시 안내에 원인 종류가 표시되며, Console의 `[blAInd] Document processing failed`에는
+`stage`와 `code`가 함께 표시됩니다. 문서 내부 원문은 이 진단 항목에 넣지 않습니다.
+
 자동 검증: `npm test`, `npx tsc --noEmit`, `npm run build`,
 `npx playwright test tests/e2e/document-flow.spec.ts`.
 문서 통합 테스트는 고정 탐지 결과와 실제 Chrome 확장/offscreen/PDF/DOCX Worker를
 사용하므로, 실제 모델의 탐지 정확도나 로그인된 ChatGPT 서버 응답까지 검증하지는 않습니다.
+개발 서버 환경도 검증하려면 PowerShell에서
+`$env:DOCUMENT_FLOW_DEV='1'; npx playwright test tests/e2e/document-flow.spec.ts`를 실행합니다.

@@ -1,5 +1,7 @@
 <!doctype html>
 <html lang="en">
   <head><meta charset="UTF-8"><title>Local PII inference</title></head>
-  <body><script type="module" src="./main.ts"></script></body>
+  <!-- Keep Workers on chrome-extension:// in dev as well as production.
+       WXT otherwise rewrites this script to the Vite server's origin. -->
+  <body><script wxt-ignore type="module" src="./main.ts"></script></body>
 </html>

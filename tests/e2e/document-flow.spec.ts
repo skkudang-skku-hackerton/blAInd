@@ -1,5 +1,6 @@
 import { test, expect, chromium } from '@playwright/test';
 import { build } from 'vite';
+import { createServer } from 'wxt';
 import { cp, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -31,7 +32,13 @@ test('built extension: intercept → offscreen document worker → modal → mas
   test.setTimeout(240_000);
   const directory = await mkdtemp(join(tmpdir(), 'blaind-document-flow-'));
   const extension = join(directory, 'extension');
-  await cp(resolve('.output/chrome-mv3'), extension, { recursive: true });
+  let devServer: Awaited<ReturnType<typeof createServer>> | undefined;
+  if (process.env.DOCUMENT_FLOW_DEV === '1') {
+    devServer = await createServer({ outDir: join(directory, 'dev-output'),
+      dev: { server: { port: 3001 } }, webExt: { disabled: true } });
+    await devServer.start();
+    await cp(join(directory, 'dev-output/chrome-mv3-dev'), extension, { recursive: true });
+  } else await cp(resolve('.output/chrome-mv3'), extension, { recursive: true });
   console.info('Document flow: extension copied');
   await build({ configFile: false, logLevel: 'error', worker: { format: 'es' }, build: {
     outDir: extension, emptyOutDir: false,
@@ -96,5 +103,5 @@ test('built extension: intercept → offscreen document worker → modal → mas
     await expect(page.getByRole('dialog')).toHaveCount(0);
     expect((await state()).uploads).toHaveLength(before);
     expect((await state()).errors).toEqual([]);
-  } finally { await context.close(); await rm(directory, { recursive: true, force: true }); }
+  } finally { await context.close(); await devServer?.stop(); await rm(directory, { recursive: true, force: true }); }
 });
