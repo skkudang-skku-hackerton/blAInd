@@ -2,7 +2,9 @@
 
 AI 웹사이트에 질문을 보내기 전에 개인정보를 감지하고, 사용자 선택에 따라 마스킹하는 크롬 확장 프로그램입니다. 텍스트 검사와 모델 추론은 사용자 기기에서 처리하도록 개발합니다.
 
-현재는 팀 개발을 위한 **디렉토리 뼈대만 준비된 상태**입니다. 각 폴더의 `.gitkeep`은 빈 디렉토리를 Git에 기록하기 위한 파일이며, 해당 폴더에 소스 파일을 추가하면 삭제해도 됩니다. 패키지 설치, 실행 설정, 기능 코드와 테스트 코드는 아직 없습니다.
+현재는 **WXT·React·TypeScript 실행 환경, Content Script와 Background 간 상태 확인 통신**이 구현되어 있습니다. 등록된 AI 페이지에서 Content Script가 실행되고 Background의 준비 상태와 확장 버전을 요청합니다. 개인정보 검사와 입력·문서 인터셉트는 이후 구현합니다.
+
+각 폴더의 `.gitkeep`은 빈 디렉토리를 Git에 기록하기 위한 파일이며, 해당 폴더에 소스 파일을 추가하면 삭제해도 됩니다. 테스트 코드는 아직 없습니다.
 
 ## 예정 기술 스택
 
@@ -15,6 +17,41 @@ AI 웹사이트에 질문을 보내기 전에 개인정보를 감지하고, 사�
 모델 개발은 별도 레포에서 진행합니다. 이 레포는 전달받은 모델과 토크나이저를 브라우저에서 실행하고, 탐지 결과를 마스킹 및 전송 흐름에 연결합니다. 브라우저 실행 호환성은 실제 모델 연결 단계에서 확인합니다.
 
 `public/models/`의 모델 파일은 `.gitignore`로 제외합니다. 모델 연결 단계에서 사용할 버전과 파일을 가져오는 방법을 정합니다.
+
+## 실행 및 메시지 통신 확인
+
+Node.js **22.12 이상**과 npm을 사용합니다. `.nvmrc`는 Node.js 22를 지정합니다. WSL에서는 Node.js와 npm을 모두 WSL 환경에 설치해 사용합니다.
+
+```bash
+npm ci
+npm run typecheck
+npm run build
+```
+
+1. 크롬 `chrome://extensions`에서 개발자 모드를 켜고, **압축해제된 확장 프로그램을 로드합니다**로 `.output/chrome-mv3`를 선택합니다.
+2. 이미 로드했다면 blAInd 카드의 새로고침 버튼을 누릅니다. 새 Background 설정을 반영하려면 확장도 다시 로드해야 합니다.
+3. 등록된 AI 페이지의 개발자 도구에서 Console을 열고 페이지를 새로고침합니다.
+4. 다음 로그가 표시되는지 확인합니다. 사이트 이름과 버전은 실행 환경에 따라 달라집니다.
+
+```text
+[blAInd] Content Script ready: ChatGPT
+[blAInd] Background connected: 0.1.0
+```
+
+확장 카드의 **서비스 워커** 검사 링크를 열면 Background 콘솔의 `[blAInd] Background ready` 로그도 확인할 수 있습니다. 서비스 워커는 유휴 상태에서 종료될 수 있으며, 메시지를 받으면 다시 실행됩니다.
+
+현재 등록 URL은 `https://chatgpt.com/*`, `https://claude.ai/*`, `https://gemini.google.com/*`이며 `src/sites/registry.ts`에서 관리합니다. URL을 추가하거나 코드를 변경한 뒤에는 다시 빌드하고 확장과 페이지를 새로고침합니다. 개발 모드는 `npm run dev`로 실행합니다.
+
+## 진입점과 메시지 규약
+
+```text
+app.content → GET_BACKGROUND_STATUS → background
+app.content ← BACKGROUND_STATUS     ← background
+```
+
+`shared/messaging/protocol.ts`는 요청·응답 타입과 런타임 검증, `client.ts`는 Content에서 사용할 요청 함수를 담당합니다. Background는 `target: 'background'`와 요청 종류가 일치할 때만 응답하고, 다른 진입점의 메시지는 처리하지 않습니다. Content는 응답을 검증하고 연결 오류를 콘솔에 표시합니다.
+
+이 상태 확인 메시지는 채팅 내용이나 파일을 포함하지 않습니다. `ready`는 Background가 메시지에 응답할 준비가 되었다는 뜻이며 모델의 로딩 상태를 나타내지는 않습니다.
 
 ## 사용자 흐름
 
@@ -36,9 +73,13 @@ AI 웹페이지에서 텍스트 입력 → Enter 또는 전송 버튼
 blAInd/
 ├── src/
 │   ├── entrypoints/          # 확장 프로그램 진입점
+│   │   ├── background.ts     # 상태 확인 요청 응답
 │   │   ├── app.content/      # 웹페이지 감지 및 사이트 연동 시작
+│   │   │   └── index.ts      # 사이트 초기화, Background 연결 확인
 │   │   ├── offscreen/        # 로컬 추론 Worker 실행 환경
 │   │   └── popup/            # 확장 활성화 및 설정 화면
+│   ├── sites/
+│   │   └── registry.ts       # 진입점 실행 대상 URL 관리
 │   ├── core/                 # 사이트·문서 형식에 독립적인 공통 기능
 │   │   ├── api/              # 모듈의 검사 요청·응답 규약과 처리
 │   │   ├── detector/         # 모델 로딩, 토큰화, 추론 및 개발용 탐지기
@@ -46,7 +87,7 @@ blAInd/
 │   │   └── workflow/         # 검사·승인·취소 상태와 전송 허가 관리
 │   ├── modules/              # 사이트별·문서 종류별 확장 모듈
 │   │   ├── sites/
-│   │   │   └── chatgpt/      # 입력 교체·전송 및 파일 대체 첨부
+│   │   │   └── chatgpt/      # 입력·문서 인터셉트, 교체·전송 및 대체 첨부
 │   │   └── documents/
 │   │       ├── pdf/          # PDF 추출·마스킹·재생성
 │   │       ├── docx/         # 추후 Word 문서 처리
@@ -55,6 +96,8 @@ blAInd/
 │   │   └── review/           # 공통 탐지 결과·사용자 확인 UI
 │   └── shared/
 │       ├── messaging/        # 확장 내부 메시지 전달
+│       │   ├── protocol.ts   # 요청·응답 타입과 런타임 검증
+│       │   └── client.ts     # Background 상태 확인 요청
 │       └── settings/         # 공통 설정·저장
 ├── public/
 │   └── models/               # 로컬 모델·토크나이저 등 배포 자산 위치
@@ -62,10 +105,15 @@ blAInd/
 │   ├── unit/                 # 추후 마스킹·상태 전이 단위 테스트
 │   └── e2e/                  # 추후 사이트별 전체 전송 흐름 테스트
 ├── .gitignore
+├── .nvmrc
+├── package.json
+├── package-lock.json
+├── tsconfig.json
+├── wxt.config.ts
 └── README.md
 ```
 
-이번 구조 정리에서는 `src/entrypoints/`를 변경하지 않았습니다. 실행 환경 구성은 별도 작업이며, 현재는 역할별 폴더와 `.gitkeep`만 유지합니다.
+`src/entrypoints/`는 시작과 연결을 담당합니다. 사이트·문서 인터셉트는 `modules/`, 검사는 `core/`, 메시지 전달은 `shared/messaging/`에서 구현합니다. `.wxt/`, `.output/`, `node_modules/`는 자동 생성되며 Git에 포함하지 않습니다.
 
 ## 코어와 모듈의 연결
 
@@ -121,7 +169,7 @@ PDF를 첫 문서 모듈로 구현하고 이후 DOCX·HWPX로 확장할 계획�
 
 ## 개발 시작 순서
 
-1. 코어 API와 사이트·문서 모듈 인터페이스를 정하고 WXT·React·TypeScript 실행 환경을 구성합니다.
+1. 구현된 Content·Background 통신을 확인하고 코어 API와 사이트·문서 인터셉트 모듈 인터페이스를 정합니다.
 2. 코어의 개발용 탐지기로 사이트 하나의 전송 보류·확인창·전송 흐름을 완성합니다.
 3. 원본 PDF 업로드 보류·대체 첨부를 검증하고 PDF 추출·마스킹·재생성을 연결합니다.
 4. 별도 레포의 모델을 연결하고 로컬 추론을 확인합니다.
