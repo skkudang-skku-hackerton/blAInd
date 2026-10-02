@@ -5,7 +5,9 @@ import { createDocumentReview } from '../../features/review/document-review';
 import { createPdfProcessor } from '../../modules/documents/pdf';
 import { createDocxProcessor } from '../../modules/documents/docx';
 import { documentErrorNotice, documentErrorCode } from '../../modules/documents/shared/errors';
-import { createFileUploadInterceptor } from '../../modules/sites/chatgpt/file-upload';
+import { createFileUploadInterceptor as createChatgptFileUploadInterceptor } from '../../modules/sites/chatgpt/file-upload';
+import { createFileUploadInterceptor as createClaudeFileUploadInterceptor } from '../../modules/sites/claude/file-upload';
+import { createFileUploadInterceptor as createGeminiFileUploadInterceptor } from '../../modules/sites/gemini/file-upload';
 import { openPdfOffscreen, openDocxOffscreen } from '../../shared/messaging/document-client';
 import { createTextReviewController } from '../../features/review/text-review';
 import { createTextSender } from '../../features/review/text-send';
@@ -58,18 +60,23 @@ export default defineContentScript({
         notice.show(`${documentErrorNotice(error)} 원본은 첨부되지 않았습니다.`);
       },
     };
-    const fileInterceptor = site.id === 'chatgpt' ? createFileUploadInterceptor({
+    const createFileUploadInterceptor = {
+      chatgpt: createChatgptFileUploadInterceptor,
+      claude: createClaudeFileUploadInterceptor,
+      gemini: createGeminiFileUploadInterceptor,
+    }[site.id];
+    const fileInterceptor = createFileUploadInterceptor({
       processors: {
         pdf: createPdfProcessor({ ...documentOptions, openPdf: openPdfOffscreen }),
         docx: createDocxProcessor({ ...documentOptions, openDocx: openDocxOffscreen }),
       },
-      onProcessed() { notice.show('검사가 끝난 파일을 ChatGPT에 첨부했습니다.'); },
+      onProcessed() { notice.show(`검사가 끝난 파일을 ${site.name}에 첨부했습니다.`); },
       onSkipped() {
         if (!documentFailed) notice.show('문서 업로드를 취소했습니다. 파일은 첨부되지 않았습니다.');
       },
       onError: documentOptions.onError,
-    }) : undefined;
-    fileInterceptor?.start();
+    });
+    fileInterceptor.start();
     let downloadProgress = -1;
     const onScanError = (error: unknown) => {
       console.error(`[blAInd] PII scan failed: ${site.name}`, {
@@ -121,7 +128,7 @@ export default defineContentScript({
       },
     });
     const unsubscribeStatus = detector.onStatus(status => {
-      if (!scanner.isScanning() && !(fileInterceptor?.isProcessing && documentStage === 'scanning')) return;
+      if (!scanner.isScanning() && !(fileInterceptor.isProcessing && documentStage === 'scanning')) return;
       if (status.state === 'downloading') {
         const progress = Math.round(status.progress * 100);
         if (progress === downloadProgress) return;
@@ -162,7 +169,7 @@ export default defineContentScript({
     window.addEventListener('pagehide', cancel);
     navigation?.addEventListener('navigate', cancel);
     ctx.onInvalidated(() => {
-      fileInterceptor?.stop();
+      fileInterceptor.stop();
       interceptor.stop();
       window.removeEventListener('input', invalidate, true);
       window.removeEventListener('change', invalidate, true);
