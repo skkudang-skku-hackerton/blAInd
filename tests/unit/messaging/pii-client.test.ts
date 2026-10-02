@@ -7,7 +7,7 @@ import { deferred, mockRuntime, ready, requiredAt } from './helpers';
 
 afterEach(() => vi.useRealTimers());
 describe('PII browser client', () => {
-  it('auto-initializes once for concurrent calls and correlates unique scan requests', async () => {
+  it('shares page preload with concurrent scans and correlates unique scan requests', async () => {
     const { runtime, sendMessage } = mockRuntime();
     const init = deferred<unknown>();
     sendMessage.mockImplementation(async message => {
@@ -16,9 +16,11 @@ describe('PII browser client', () => {
       return { channel: PII_CHANNEL, clientId: req.clientId, requestId: req.requestId, type: 'pii:result', result: [] };
     });
     const client = createPiiDetectorClient({ runtime });
+    const preload = client.initialize();
     const scans = [client.scanText('one'), client.scanText('two')];
     await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
     init.resolve(ready(requiredAt(sendMessage.mock.calls, 0)[0] as PiiRequest));
+    await expect(preload).resolves.toBeUndefined();
     await expect(Promise.all(scans)).resolves.toEqual([[], []]);
     const messages = sendMessage.mock.calls.map(([message]) => message as PiiRequest);
     expect(new Set(messages.map(message => message.requestId)).size).toBe(3);

@@ -91,7 +91,7 @@ app.content ← BACKGROUND_STATUS     ← background
 
 등록된 세 사이트에 사이트별 입력창·전송 버튼 어댑터와 공통 전송 인터셉터를 연결했습니다. 텍스트가 있는 채팅 입력창에서 일반 Enter를 누르거나 인식한 전송 버튼을 클릭하면 전송을 보류하고 입력 내용을 유지하며, 화면 오른쪽 아래에 안내를 표시합니다.
 
-보류한 시점의 원문을 `createPiiDetectorClient().scanText()`에 전달합니다. 검사 요청은 확장 내부의 Background → Offscreen → Worker로 전달되며, 추론은 사용자 기기에서 실행합니다. 최초 검사에서는 모델을 다운로드하고 이후에는 캐시를 재사용합니다. 채팅 원문을 외부 추론 서버로 보내지 않습니다.
+보류한 시점의 원문을 `createPiiDetectorClient().scanText()`에 전달합니다. 검사 요청은 확장 내부의 Background → Offscreen → Worker로 전달되며, 추론은 사용자 기기에서 실행합니다. 등록된 AI 페이지를 열면 `initialize()`로 모델 준비를 바로 시작합니다. 최초에는 모델을 다운로드하고 이후에는 캐시를 재사용합니다. 준비 중 검사 요청은 진행 중인 초기화를 공유하며, 사전 준비 실패 시 다음 검사에서 다시 시도합니다. 콘솔의 `Model preload started`와 `Model preload ready`로 준비 상태를 확인할 수 있습니다. 채팅 원문을 외부 추론 서버로 보내지 않습니다.
 
 콘솔에는 `[blAInd] Enter intercepted: ChatGPT` 또는 `[blAInd] Send button intercepted: ChatGPT`와 글자 수가 표시되고, 이어서 `PII scan started`와 `PII scan completed` 로그가 나타납니다. 완료 로그에는 탐지 개수와 유형만 표시합니다. 사용자가 Alert에서 진행을 승인하면 마스킹한 텍스트를 입력창에 반영하고 전송 버튼을 한 번 호출합니다. 콘솔에는 `[blAInd] Approved text send requested`를 기록하며 최종 텍스트 자체는 기록하지 않습니다. 이 로그는 사이트의 응답 수신 완료를 의미하지 않습니다. 안내의 **닫기**는 안내만 닫으며 전송을 재개하지 않습니다.
 

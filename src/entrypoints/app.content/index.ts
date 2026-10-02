@@ -185,6 +185,19 @@ export default defineContentScript({
       notice.dispose();
     });
 
+    // 페이지 진입 시 미리 준비합니다. await하지 않아 전송/업로드 차단과
+    // Background 상태 확인을 지연하지 않으며, 검사 요청은 진행 중인 초기화를 공유합니다.
+    console.info(`[blAInd] Model preload started: ${site.name}`);
+    void detector.initialize().then(() => {
+      if (ctx.isInvalid) return;
+      console.info(`[blAInd] Model preload ready: ${site.name}`);
+    }).catch((error: unknown) => {
+      if (ctx.isInvalid) return;
+      console.warn(`[blAInd] Model preload failed; will retry on scan: ${site.name}`, {
+        code: error instanceof PiiError ? error.code : 'MODEL_LOAD_FAILED',
+      });
+    });
+
     try {
       const response = await requestBackgroundStatus();
       if (ctx.isInvalid) return;
