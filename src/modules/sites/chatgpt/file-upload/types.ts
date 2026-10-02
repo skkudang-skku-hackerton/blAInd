@@ -9,6 +9,8 @@
  * DocumentProcessor 하나만 정의한다.
  */
 
+import type { ProcessingIndicator } from './processing-indicator';
+
 export const CHATGPT_SITE_ID = 'chatgpt' as const;
 export type ChatGptSiteId = typeof CHATGPT_SITE_ID;
 
@@ -52,6 +54,12 @@ export interface FileUploadInterceptorOptions {
    * - 'hold': 첨부하지 않고 보류
    */
   unhandled?: 'passthrough' | 'hold';
+  /**
+   * 처리 중 오버레이. 기본값은 자동 생성되는 기본 인디케이터.
+   * - false: 표시하지 않음
+   * - ProcessingIndicator: 직접 만든 인디케이터 주입
+   */
+  indicator?: ProcessingIndicator | false;
   /** 파일 하나가 처리 완료됐을 때. */
   onProcessed?: (info: { requestId: string; context: FileInterceptContext }) => void;
   /** 처리되지 않고 건너뛴 파일. */

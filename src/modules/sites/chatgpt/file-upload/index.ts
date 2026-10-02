@@ -26,7 +26,14 @@ export type { FileUploadInterceptor } from './dom-interceptor';
 export { installNetworkGuard } from './network-guard';
 export type { NetworkGuard, NetworkGuardOptions, NetworkGuardDetectInfo } from './network-guard';
 export { classifyFile } from './classify';
-export { injectFilesIntoDrop, injectFilesIntoInput, createFileList } from './file-injector';
+export { injectFilesIntoDrop, injectFilesIntoInput, createFileList, resolveFileInput } from './file-injector';
+export { createProcessingIndicator } from './processing-indicator';
+export type {
+  ProcessingIndicator,
+  ProcessingIndicatorInfo,
+  ProcessingIndicatorLabels,
+  ProcessingIndicatorOptions,
+} from './processing-indicator';
 export { isInternalEvent, markInternalEvent } from './event-guard';
 export { CHATGPT_SITE_ID } from './types';
 export type {

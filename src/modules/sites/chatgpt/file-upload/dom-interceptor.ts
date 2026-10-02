@@ -5,6 +5,7 @@
  * 1. change / drop / paste 를 capture 단계에서 잡아 페이지(React)로 전파되기 전에 끊는다.
  * 2. 파일을 종류별로 분류해 알맞은 문서 모듈(DocumentProcessor)에 넘긴다.
  * 3. 문서 모듈이 돌려준 파일을 ChatGPT 첨부로 재주입한다.
+ * 4. 처리하는 동안 "검사 중" 오버레이를 보여준다(processing-indicator).
  *
  * 코어와의 통신은 문서 모듈 안에서 일어나며 이 모듈은 관여하지 않는다.
  *
@@ -18,7 +19,8 @@
 
 import { classifyFile } from './classify';
 import { isInternalEvent } from './event-guard';
-import { injectFilesIntoDrop, injectFilesIntoInput } from './file-injector';
+import { injectFilesIntoDrop, injectFilesIntoInput, resolveFileInput } from './file-injector';
+import { createProcessingIndicator, type ProcessingIndicator } from './processing-indicator';
 import type {
   DocumentKind,
   FileInterceptContext,
@@ -42,6 +44,7 @@ type ProcessOutcome =
   | { ok: false; reason: 'unhandled' | 'cancelled'; context: FileInterceptContext };
 
 const LOG_PREFIX = '[blAInd:chatgpt:file-upload]';
+const INDICATOR_SHOW_DELAY_MS = 150;
 
 export function createFileUploadInterceptor(
   options: FileUploadInterceptorOptions,
@@ -49,6 +52,11 @@ export function createFileUploadInterceptor(
   const { processors } = options;
   const unhandledPolicy = options.unhandled ?? 'passthrough';
   const root: Document | ShadowRoot = options.root ?? document;
+  const ownsIndicator = options.indicator === undefined;
+  const indicator: ProcessingIndicator | null =
+    options.indicator === false
+      ? null
+      : options.indicator ?? createProcessingIndicator();
 
   const log = (...args: unknown[]): void => {
     if (options.debug) {
@@ -59,6 +67,29 @@ export function createFileUploadInterceptor(
   let active: ActiveBatch | null = null;
   let sequence = 0;
   let started = false;
+
+  // 오버레이는 잠깐의 처리(즉시 passthrough)에서 깜빡이지 않도록 살짝 지연해 띄운다.
+  let showTimer: number | null = null;
+  let indicatorToken = 0;
+
+  function showIndicator(info: { fileCount: number; fileNames: readonly string[] }): void {
+    if (!indicator) return;
+    const token = ++indicatorToken;
+    if (showTimer !== null) window.clearTimeout(showTimer);
+    showTimer = window.setTimeout(() => {
+      showTimer = null;
+      if (token === indicatorToken) indicator.show(info);
+    }, INDICATOR_SHOW_DELAY_MS);
+  }
+
+  function hideIndicator(): void {
+    indicatorToken += 1;
+    if (showTimer !== null) {
+      window.clearTimeout(showTimer);
+      showTimer = null;
+    }
+    indicator?.hide();
+  }
 
   function abortActive(): void {
     if (active) {
@@ -98,17 +129,20 @@ export function createFileUploadInterceptor(
   async function process(
     files: readonly File[],
     source: FileSource,
-    reinject: (processedFiles: readonly File[]) => void,
+    reinject: (processedFiles: readonly File[]) => boolean,
   ): Promise<void> {
     if (files.length === 0) return;
 
+    // 새 선택/드롭이 들어오면 이전 처리는 무효화한다.
     abortActive();
 
     const controller = new AbortController();
     const requestId = `chatgpt-file-${Date.now()}-${++sequence}`;
     active = { controller };
 
-    log('captured', { requestId, source, names: files.map((f) => f.name) });
+    const fileNames = files.map((file) => file.name);
+    log('captured', { requestId, source, names: fileNames });
+    showIndicator({ fileCount: files.length, fileNames });
 
     try {
       const outcomes = await Promise.all(
@@ -139,7 +173,17 @@ export function createFileUploadInterceptor(
 
       if (processedFiles.length !== files.length) return;
 
-      reinject(processedFiles);
+      const reinjected = reinject(processedFiles);
+      if (!reinjected) {
+        // 첨부 input 을 찾지 못한 경우. 원본을 대신 흘리지 않고 오류로 알린다.
+        const first = outcomes[0];
+        log('reinject failed', { requestId });
+        if (first) {
+          options.onError?.(new Error('Failed to re-attach processed file'), first.context);
+        }
+        return;
+      }
+
       for (const outcome of outcomes) {
         if (outcome.ok) options.onProcessed?.({ requestId, context: outcome.context });
       }
@@ -151,12 +195,13 @@ export function createFileUploadInterceptor(
       options.onError?.(error, {
         requestId,
         source,
-        kind: 'unknown',
+        kind: files[0] ? classifyFile(files[0]) : 'unknown',
         file: files[0]!,
       });
     } finally {
       if (active?.controller === controller) {
         active = null;
+        hideIndicator();
       }
     }
   }
@@ -175,10 +220,12 @@ export function createFileUploadInterceptor(
     event.preventDefault();
 
     // 원본이 다른 경로로 새지 않게 즉시 비운다. File 참조는 위에서 확보했다.
+    const accept = input.accept;
     input.value = '';
 
     void process(files, 'input', (processedFiles) => {
-      injectFilesIntoInput(input, processedFiles);
+      const target = resolveFileInput(input, accept);
+      return target ? injectFilesIntoInput(target, processedFiles) : false;
     });
   }
 
@@ -193,7 +240,7 @@ export function createFileUploadInterceptor(
 
     const target = event.target;
     void process(files, 'drop', (processedFiles) => {
-      injectFilesIntoDrop(target, processedFiles);
+      return injectFilesIntoDrop(target, processedFiles);
     });
   }
 
@@ -208,7 +255,7 @@ export function createFileUploadInterceptor(
 
     const target = event.target;
     void process(files, 'paste', (processedFiles) => {
-      injectFilesIntoDrop(target, processedFiles);
+      return injectFilesIntoDrop(target, processedFiles);
     });
   }
 
@@ -225,12 +272,19 @@ export function createFileUploadInterceptor(
       if (!started) return;
       started = false;
       abortActive();
+      hideIndicator();
+      if (ownsIndicator) {
+        indicator?.destroy();
+      }
       root.removeEventListener('change', onChange, true);
       root.removeEventListener('drop', onDrop as EventListener, true);
       root.removeEventListener('paste', onPaste as EventListener, true);
       log('interceptor stopped');
     },
-    abort: abortActive,
+    abort(): void {
+      abortActive();
+      hideIndicator();
+    },
     get isProcessing(): boolean {
       return active !== null;
     },
