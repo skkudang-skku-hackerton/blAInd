@@ -43,7 +43,7 @@ try {
 
 `initialize()`는 자동으로 호출되므로 먼저 부르지 않아도 됩니다. 모델 다운로드 진행 상태는 `detector.onStatus(listener)`로 구독할 수 있고, `detector.dispose()`는 이 클라이언트의 리스너와 대기 요청만 정리하며 공유 모델은 내려가지 않습니다.
 
-`public/models/`의 모델 파일은 `.gitignore`로 제외합니다. 모델 연결 단계에서 사용할 버전과 파일을 가져오는 방법을 정합니다.
+모델은 최초 초기화 시 Hugging Face에서 내려받아 브라우저 Cache Storage에 캐시하고, 이후에는 캐시를 재사용합니다. 사용할 버전과 파일은 `src/core/detector/ko-pii/model-config.ts`에서 커밋으로 고정합니다.
 
 ## 실행 및 메시지 통신 확인
 
@@ -126,8 +126,6 @@ blAInd/
 │       │   ├── protocol.ts   # 요청·응답 타입과 런타임 검증
 │       │   └── client.ts     # Background 상태 확인 요청
 │       └── settings/         # 공통 설정·저장
-├── public/
-│   └── models/               # 로컬 모델·토크나이저 등 배포 자산 위치
 ├── tests/
 │   ├── unit/                 # 추후 마스킹·상태 전이 단위 테스트
 │   └── e2e/                  # 추후 사이트별 전체 전송 흐름 테스트
