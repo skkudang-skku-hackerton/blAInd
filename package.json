@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@huggingface/tokenizers": "0.2.0",
+    "@xmldom/xmldom": "0.9.12",
+    "fflate": "0.8.3",
     "mupdf": "1.28.1",
     "onnxruntime-web": "1.30.0",
     "react": "^19.3.0",
