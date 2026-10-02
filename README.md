@@ -143,7 +143,8 @@ blAInd/
 │   │   └── documents/
 │   │       ├── pdf/          # PDF 추출·마스킹·재생성
 │   │       ├── docx/         # Word OOXML 추출·마스킹·재생성
-│   │       ├── shared/       # PDF·DOCX 공통 Detector/Alert 계약·응답 검증
+│   │       ├── text/         # TXT·Markdown 텍스트 추출·마스킹·재생성
+│   │       ├── shared/       # 문서 모듈 공통 Detector/Alert 계약·응답 검증
 │   │       └── hwpx/         # 추후 HWPX 문서 처리
 │   ├── features/
 │   │   └── review/           # hold-notice.ts: 안내, text-scan.ts: 원문·탐지 결과와 요청 수명 관리
@@ -206,10 +207,11 @@ URL 등록은 확장이 실행될 페이지를 정합니다. 각 사이트의 �
 
 ## 문서 지원 계획
 
-PDF와 DOCX 모듈을 제공하며 이후 HWPX로 확장할 계획입니다. 파일 선택·드롭 단계에서 원본 업로드를 보류하고, 사용자 동의 후 **마스킹된 새 파일을 생성하여 사이트에 첨부**합니다. 메시지 전송만 막거나 이미 업로드된 파일을 삭제하는 것으로는 원본 유출을 방지할 수 없습니다. 실제 사이트에서 업로드 보류와 대체 첨부가 가능한지 먼저 검증합니다.
+PDF, DOCX, TXT/Markdown 모듈을 제공하며 이후 HWPX로 확장할 계획입니다. 파일 선택·드롭 단계에서 원본 업로드를 보류하고, 사용자 동의 후 **마스킹된 새 파일을 생성하여 사이트에 첨부**합니다. 메시지 전송만 막거나 이미 업로드된 파일을 삭제하는 것으로는 원본 유출을 방지할 수 없습니다. 실제 사이트에서 업로드 보류와 대체 첨부가 가능한지 먼저 검증합니다.
 
 - [PDF 모듈 연결·지원 범위](src/modules/documents/pdf/README.md)
 - [DOCX 모듈 연결·지원 범위](src/modules/documents/docx/README.md)
+- [TXT/Markdown 모듈 연결·지원 범위](src/modules/documents/text/README.md)
 
 두 모듈은 동일한 코어 검사 API와 Alert 검토 데이터 계약을 사용합니다. 실제 코어 클라이언트와 검토 함수를 주입해야 하며, 사이트 진입점에 자동으로 연결되는 것은 아닙니다. DOCX는 OOXML 문서만 대상으로 하며 구형 바이너리 `.doc` 파일은 지원하지 않습니다.
 
