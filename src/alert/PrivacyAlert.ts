@@ -23,6 +23,7 @@ function detectedText(text: string, detection: Detection): string {
 /** Mounts an accessible privacy review dialog. The caller owns the host and should call the returned cleanup. */
 export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOptions): () => void {
   const { analysis, onComplete, onCancel } = options;
+  const previousFocus = document.activeElement as HTMLElement | null;
   const style = document.createElement('style');
   style.textContent = alertStyles;
   const overlay = document.createElement('div');
@@ -66,13 +67,15 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     items.append(row);
   });
   if (!analysis.hasConfirmItems) overlay.querySelector('.blaind-alert-list')?.remove();
+  const cancelButton = overlay.querySelector<HTMLButtonElement>('.blaind-alert-cancel')!;
   const keep = overlay.querySelector<HTMLButtonElement>('.blaind-alert-keep')!;
   const mask = overlay.querySelector<HTMLButtonElement>('.blaind-alert-mask')!;
-  const cancelButton = overlay.querySelector<HTMLButtonElement>('.blaind-alert-cancel')!;
   if (!analysis.hasConfirmItems) mask.remove();
   else keep.textContent = '선택 없이 진행';
 
+  let finished = false;
   const finish = (selectedConfirm: readonly Detection[]) => {
+    if (finished) return;
     const result = buildReviewResult(analysis, selectedConfirm);
     cleanup();
     onComplete(result);
@@ -90,21 +93,23 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
       else if (!event.shiftKey && root.activeElement === last) { event.preventDefault(); first?.focus(); }
     }
   };
-  const cancel = () => { cleanup(); onCancel?.(); };
+  const cancel = () => { if (finished) return; cleanup(); onCancel?.(); };
   const onBackdrop = (event: MouseEvent) => { if (event.target === overlay) cancel(); };
   const onKeep = () => finish([]);
   const onMask = () => finish(selected());
   const cleanup = () => {
+    finished = true;
     document.removeEventListener('keydown', onKey);
+    cancelButton.removeEventListener('click', cancel);
     overlay.removeEventListener('click', onBackdrop);
     keep.removeEventListener('click', onKeep); mask.removeEventListener('click', onMask);
-    cancelButton.removeEventListener('click', cancel);
     overlay.remove(); style.remove();
+    if (previousFocus?.isConnected) previousFocus.focus();
   };
   document.addEventListener('keydown', onKey);
+  cancelButton.addEventListener('click', cancel);
   overlay.addEventListener('click', onBackdrop);
   keep.addEventListener('click', onKeep); mask.addEventListener('click', onMask);
-  cancelButton.addEventListener('click', cancel);
   dialog.focus();
   return cleanup;
 }

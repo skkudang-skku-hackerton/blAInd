@@ -68,7 +68,21 @@ export function deduplicateDetections(candidates: readonly ChunkDetection[]): De
       kept.push({ detection: { ...candidate, span: { ...candidate.span } }, chunks: new Set([candidate.chunkIndex]) });
     }
   }
-  return kept.map((item) => item.detection)
+  // Reconciliation alone can leave conflicting types or partial overlaps. Resolve
+  // those while truncation metadata is still available, regardless of chunk/type.
+  const resolved: ChunkDetection[] = [];
+  const conflictsRanked = kept.map((item) => item.detection).sort((a, b) =>
+    Number(a.truncatedStart || a.truncatedEnd) - Number(b.truncatedStart || b.truncatedEnd) ||
+    b.confidence - a.confidence ||
+    (b.span.end - b.span.start) - (a.span.end - a.span.start) ||
+    a.span.start - b.span.start || a.type.localeCompare(b.type) || a.chunkIndex - b.chunkIndex);
+  for (const candidate of conflictsRanked) {
+    if (!resolved.some((existing) =>
+      candidate.span.start < existing.span.end && existing.span.start < candidate.span.end)) {
+      resolved.push(candidate);
+    }
+  }
+  return resolved
     .sort((a, b) => a.span.start - b.span.start || a.span.end - b.span.end || a.type.localeCompare(b.type))
     .map(({ type, confidence, span }) => ({ type, confidence, span }));
 }

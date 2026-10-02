@@ -19,12 +19,7 @@ const processDocx = createDocxProcessor({
 const processors = { pdf: processPdf, docx: processDocx };
 ```
 
-`detector`와 `review`는 호출자가 주입해야 합니다. `alertClient`는 연결 예시의 이름이며
-제공되는 전역 객체가 아닙니다. `docs/alert-review-api.md`의 다중 세그먼트·세 그룹 계약을
-구현한 프론트 호출 함수를 연결해야 합니다. 기존 `mountPrivacyAlert`의 최종 문자열을
-결정 데이터로 역추정하거나 자동 승인하지 않습니다. 프론트는 여러 문서 요청을 순서대로
-표시하고 각 signal이 취소되면 해당 창·대기 요청을 정리해야 합니다.
-entrypoint와 실제 사이트 업로드 연결은 별도입니다.
+`detector`와 `review`는 호출자가 주입합니다. ChatGPT 진입점은 실제 Detector와 `createDocumentReview`를 연결하며, 여러 segment의 선택을 원래 좌표의 세 그룹 응답으로 복원합니다. 문서 요청은 순서대로 표시하고 signal 취소 시 확인창을 정리합니다. Chrome은 offscreen, Firefox는 background page에서 문서 Worker를 실행합니다.
 
 ## API 준수
 

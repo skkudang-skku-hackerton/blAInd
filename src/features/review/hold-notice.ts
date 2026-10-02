@@ -1,4 +1,4 @@
-/** Enter 전송 보류 안내. 탐지 결과를 고르는 확인창은 다음 단계에서 연결합니다. */
+/** 검사 진행과 전송 보류 상태를 표시하는 안내. */
 export function createHoldNotice(page: Document = document) {
   let host: HTMLDivElement | null = null;
   let messageNode: HTMLParagraphElement | null = null;

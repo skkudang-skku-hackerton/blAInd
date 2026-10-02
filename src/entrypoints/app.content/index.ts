@@ -7,6 +7,8 @@ import { createDocxProcessor } from '../../modules/documents/docx';
 import { documentErrorNotice, documentErrorCode } from '../../modules/documents/shared/errors';
 import { createFileUploadInterceptor } from '../../modules/sites/chatgpt/file-upload';
 import { openPdfOffscreen, openDocxOffscreen } from '../../shared/messaging/document-client';
+import { createTextReviewController } from '../../features/review/text-review';
+import { createTextSender } from '../../features/review/text-send';
 import { createTextScanController } from '../../features/review/text-scan';
 import { getTextSiteAdapter } from '../../modules/sites/text-adapters';
 import { createTextSubmitInterceptor } from '../../modules/text';
@@ -75,25 +77,46 @@ export default defineContentScript({
       });
       notice.show('개인정보 검사에 실패해 전송을 보류했습니다. 입력은 유지됩니다. 다시 시도해 주세요.');
     };
+    const review = createTextReviewController({
+      getCurrentResult: () => scanner.getResult(),
+      onApproved(text) {
+        const result = scanner.getResult();
+        if (!result) return;
+        scanner.clear();
+        notice.show('승인한 내용을 입력창에 반영하고 전송합니다.');
+        void sender.send(result, text).then(() => {
+          notice.dispose();
+          console.info('[blAInd] Approved text send requested');
+        }).catch(() => {
+          if (ctx.isInvalid) return;
+          notice.show('입력 변경 또는 전송 버튼 확인 실패로 전송을 중단했습니다. 입력창을 확인하고 다시 시도해 주세요.');
+        });
+      },
+      onCancelled() {
+        notice.show('확인을 취소했습니다. 입력은 유지되며 전송하지 않습니다.');
+      },
+      onError: onScanError,
+    });
     const scanner = createTextScanController({
       detector,
       readText: editor => adapter.readText(editor),
       getPageUrl: () => window.location.href,
       onScanning({ text }) {
+        review.close();
         downloadProgress = -1;
         console.info(`[blAInd] PII scan started: ${site.name}`, { length: text.length });
         notice.show('입력한 내용에서 개인정보를 검사하고 있습니다. 전송은 보류됩니다.');
       },
-      onResult({ detections }) {
-        // 값과 원문은 로그에 남기지 않고, 확인 UI 연결에 필요한 결과는 scanner가 유지합니다.
+      onResult(result) {
+        const { detections } = result;
         const types = [...new Set(detections.map(detection => detection.type))];
         console.info(`[blAInd] PII scan completed: ${site.name}`, { count: detections.length, types });
-        notice.show(detections.length > 0
-          ? `개인정보 후보 ${detections.length}개를 찾았습니다. 전송은 보류되며 입력 내용은 유지됩니다.`
-          : '개인정보 검사가 완료됐습니다. 탐지된 항목은 없으며, 전송은 보류됩니다.');
+        notice.dispose();
+        review.open(result);
       },
       onError: onScanError,
       onDiscarded() {
+        review.close();
         notice.show('입력 또는 대화가 변경되어 검사 결과를 폐기했습니다. 전송하려면 다시 검사해 주세요.');
       },
     });
@@ -113,21 +136,24 @@ export default defineContentScript({
     const interceptor = createTextSubmitInterceptor({
       adapter,
       onIntercept(context) {
+        sender.cancel();
         const { text, source } = context;
         const action = source === 'enter' ? 'Enter' : 'Send button';
         console.info(`[blAInd] ${action} intercepted: ${site.name}`, { length: text.length });
         void scanner.scan(context).catch(onScanError);
       },
       onError() {
+        sender.cancel();
         scanner.cancel();
         console.error(`[blAInd] Text send interception failed: ${site.name}`);
         notice.show('입력 내용을 확인하지 못해 전송을 보류했습니다.');
       },
     });
+    const sender = createTextSender(adapter, interceptor, () => window.location.href);
     // Background 응답을 기다리는 동안에도 Enter와 버튼 전송을 잡습니다.
     interceptor.start();
     const invalidate = () => scanner.invalidate();
-    const cancel = () => scanner.cancel();
+    const cancel = () => { sender.cancel(); scanner.cancel(); };
     const navigation = (window as Window & { navigation?: EventTarget }).navigation;
     window.addEventListener('input', invalidate, true);
     window.addEventListener('change', invalidate, true);
@@ -144,6 +170,8 @@ export default defineContentScript({
       window.removeEventListener('hashchange', cancel);
       window.removeEventListener('pagehide', cancel);
       navigation?.removeEventListener('navigate', cancel);
+      sender.cancel();
+      review.dispose();
       scanner.dispose();
       unsubscribeStatus();
       detector.dispose();
@@ -161,6 +189,6 @@ export default defineContentScript({
       console.error('[blAInd] Background connection failed', error);
     }
 
-    // 다음 단계: scanner의 TextScanResult → Alert 항목 선택 → 교체·전송.
+    // Alert 승인 후 원문 유효성을 확인하고 교체·전송합니다.
   },
 });

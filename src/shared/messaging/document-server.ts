@@ -6,7 +6,7 @@ import { DEFAULT_LIMITS as PDF_LIMITS, type PdfSession } from '../../modules/doc
 import { DEFAULT_LIMITS as DOCX_LIMITS } from '../../modules/documents/docx/types';
 import { documentErrorCode } from '../../modules/documents/shared/errors';
 
-export function installDocumentServer(runtime: MessagingRuntime): () => void {
+export function installDocumentServer(runtime: MessagingRuntime, host: 'offscreen' | 'background' = 'offscreen'): () => void {
   const sessions = new Map<string, { controller: AbortController; chunks: Uint8Array[];
     size: number; session?: PdfSession; output?: Uint8Array; timer: ReturnType<typeof setTimeout>; busy: boolean }>();
   const close = (key: string) => {
@@ -18,9 +18,14 @@ export function installDocumentServer(runtime: MessagingRuntime): () => void {
     state.session?.close();
   };
   const listener: MessageListener = (message, sender, respond) => {
-    const m = message as any;
-    if (!ownsSender(runtime, sender) || sender.url !== runtime.getURL('background.js') ||
-        m?.channel !== DOCUMENT_CHANNEL || m.target !== 'offscreen') return;
+    const incoming = message as any;
+    if (!ownsSender(runtime, sender) || incoming?.channel !== DOCUMENT_CHANNEL || incoming.target !== host) return;
+    if (host === 'offscreen' && sender.url !== runtime.getURL('background.js')) return;
+    // Firefox has no offscreen API. Derive ownership from the actual sender,
+    // never from a caller-provided owner field.
+    const m = host === 'background' ? { ...incoming,
+      owner: JSON.stringify([sender.tab?.id ?? 'extension', sender.documentId ?? sender.url, sender.frameId]),
+    } : incoming;
     const execute = async () => {
       if (typeof m.owner !== 'string' || typeof m.sessionId !== 'string' ||
           !['pdf', 'docx'].includes(m.kind)) throw new Error('Invalid document request');

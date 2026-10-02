@@ -81,19 +81,19 @@ app.content ← BACKGROUND_STATUS     ← background
 
 이 상태 확인 메시지는 채팅 내용이나 파일을 포함하지 않습니다. `ready`는 Background가 메시지에 응답할 준비가 되었다는 뜻이며 모델의 로딩 상태를 나타내지는 않습니다.
 
-## 현재 구현: Enter·전송 버튼 보류와 모델 검사
+## 현재 구현: 모델 검사·항목 선택·마스킹 전송
 
 등록된 세 사이트에 사이트별 입력창·전송 버튼 어댑터와 공통 전송 인터셉터를 연결했습니다. 텍스트가 있는 채팅 입력창에서 일반 Enter를 누르거나 인식한 전송 버튼을 클릭하면 전송을 보류하고 입력 내용을 유지하며, 화면 오른쪽 아래에 안내를 표시합니다.
 
 보류한 시점의 원문을 `createPiiDetectorClient().scanText()`에 전달합니다. 검사 요청은 확장 내부의 Background → Offscreen → Worker로 전달되며, 추론은 사용자 기기에서 실행합니다. 최초 검사에서는 모델을 다운로드하고 이후에는 캐시를 재사용합니다. 채팅 원문을 외부 추론 서버로 보내지 않습니다.
 
-콘솔에는 `[blAInd] Enter intercepted: ChatGPT` 또는 `[blAInd] Send button intercepted: ChatGPT`와 글자 수가 표시되고, 이어서 `PII scan started`와 `PII scan completed` 로그가 나타납니다. 완료 로그에는 탐지 개수와 유형만 표시합니다. 원문과 탐지된 값은 콘솔에 기록하지 않습니다. 안내의 **닫기**는 안내만 닫으며 전송을 재개하지 않습니다.
+콘솔에는 `[blAInd] Enter intercepted: ChatGPT` 또는 `[blAInd] Send button intercepted: ChatGPT`와 글자 수가 표시되고, 이어서 `PII scan started`와 `PII scan completed` 로그가 나타납니다. 완료 로그에는 탐지 개수와 유형만 표시합니다. 사용자가 Alert에서 진행을 승인하면 마스킹한 텍스트를 입력창에 반영하고 전송 버튼을 한 번 호출합니다. 콘솔에는 `[blAInd] Approved text send requested`를 기록하며 최종 텍스트 자체는 기록하지 않습니다. 이 로그는 사이트의 응답 수신 완료를 의미하지 않습니다. 안내의 **닫기**는 안내만 닫으며 전송을 재개하지 않습니다.
 
 Shift+Enter와 한글 조합 중 Enter, 첨부·음성·생성 중지·비활성 버튼은 통과시킵니다. 입력창과 전송 버튼은 이벤트마다 다시 찾으므로 SPA에서 새 대화로 이동하거나 입력 영역이 교체되어도 대응합니다. 전송 버튼에 연결된 입력창을 찾지 못하거나 여러 입력창이 있어 모호하면 클릭을 보류합니다. 실제 사이트의 DOM 선택자와 이벤트 처리 순서는 Chrome에서 확인해야 합니다.
 
-`features/review/text-scan.ts`는 원문과 탐지 구간을 함께 보관해 다음 단계의 Alert에 전달할 수 있도록 합니다. 검사 중 같은 원문으로 Enter·버튼을 연속 사용하면 검사를 중복하지 않습니다. 다른 입력의 검사는 이전 요청을 취소하며, 입력 수정·입력창 교체·대화 이동·확장 무효화 뒤의 응답은 폐기합니다.
+`features/review/text-scan.ts`는 원문과 탐지 구간을 함께 보관하고 `features/review/text-review.ts`가 Alert UI와 마스킹 처리를 연결합니다. 검사 중 같은 원문으로 Enter·버튼을 연속 사용하면 검사를 중복하지 않습니다. 다른 입력의 검사는 이전 요청을 취소하며, 입력 수정·입력창 교체·대화 이동·확장 무효화 뒤의 응답은 폐기합니다.
 
-현재 단계에서는 탐지가 0개이거나 검사가 실패해도 전송을 계속 보류합니다. 탐지 항목 선택, 선택한 구간의 마스킹과 재전송은 다음 단계입니다. Ctrl/Alt/Meta+Enter 처리는 아직 연결하지 않았습니다. 모듈 API와 확인 방법은 [`src/modules/text/README.md`](src/modules/text/README.md)를 참고해주세요.
+Alert에서 선택한 Confirm 항목과 모든 Auto Mask 항목을 마스킹합니다. 같은 타입·같은 값은 같은 라벨을 사용합니다. 탐지가 0개여도 승인 후에만 전송합니다. 취소·오류·입력 또는 대화 변경 시에는 전송하지 않습니다. 교체 후 원문 위치와 승인 텍스트를 다시 확인하고, 해당 입력창의 활성 전송 버튼만 한 번 호출합니다. 버튼을 찾지 못하면 교체된 텍스트를 유지하고 전송을 중단합니다. Ctrl/Alt/Meta+Enter 처리는 아직 연결하지 않았습니다. 모듈 API와 확인 방법은 [`src/modules/text/README.md`](src/modules/text/README.md)를 참고해주세요.
 
 ## 목표 사용자 흐름
 
@@ -143,7 +143,8 @@ blAInd/
 │   │   └── documents/
 │   │       ├── pdf/          # PDF 추출·마스킹·재생성
 │   │       ├── docx/         # Word OOXML 추출·마스킹·재생성
-│   │       ├── shared/       # PDF·DOCX 공통 Detector/Alert 계약·응답 검증
+│   │       ├── text/         # TXT·Markdown 텍스트 추출·마스킹·재생성
+│   │       ├── shared/       # 문서 모듈 공통 Detector/Alert 계약·응답 검증
 │   │       └── hwpx/         # 추후 HWPX 문서 처리
 │   ├── features/
 │   │   └── review/           # hold-notice.ts: 안내, text-scan.ts: 원문·탐지 결과와 요청 수명 관리
@@ -206,12 +207,13 @@ URL 등록은 확장이 실행될 페이지를 정합니다. 각 사이트의 �
 
 ## 문서 지원 계획
 
-PDF와 DOCX 모듈을 제공하며 이후 HWPX로 확장할 계획입니다. 파일 선택·드롭 단계에서 원본 업로드를 보류하고, 사용자 동의 후 **마스킹된 새 파일을 생성하여 사이트에 첨부**합니다. 메시지 전송만 막거나 이미 업로드된 파일을 삭제하는 것으로는 원본 유출을 방지할 수 없습니다. 실제 사이트에서 업로드 보류와 대체 첨부가 가능한지 먼저 검증합니다.
+PDF, DOCX, TXT/Markdown 모듈을 제공하며 이후 HWPX로 확장할 계획입니다. 파일 선택·드롭 단계에서 원본 업로드를 보류하고, 사용자 동의 후 **마스킹된 새 파일을 생성하여 사이트에 첨부**합니다. 메시지 전송만 막거나 이미 업로드된 파일을 삭제하는 것으로는 원본 유출을 방지할 수 없습니다. 실제 사이트에서 업로드 보류와 대체 첨부가 가능한지 먼저 검증합니다.
 
 - [PDF 모듈 연결·지원 범위](src/modules/documents/pdf/README.md)
 - [DOCX 모듈 연결·지원 범위](src/modules/documents/docx/README.md)
+- [TXT/Markdown 모듈 연결·지원 범위](src/modules/documents/text/README.md)
 
-두 모듈은 동일한 코어 검사 API와 Alert 검토 데이터 계약을 사용합니다. 실제 코어 클라이언트와 검토 함수를 주입해야 하며, 사이트 진입점에 자동으로 연결되는 것은 아닙니다. DOCX는 OOXML 문서만 대상으로 하며 구형 바이너리 `.doc` 파일은 지원하지 않습니다.
+문서 모듈은 동일한 코어 검사 API와 Alert 검토 데이터 계약을 사용합니다. 현재 ChatGPT 진입점에는 PDF와 DOCX의 업로드 보류 → 검사 → 항목 선택 → 마스킹 파일 재첨부가 연결돼 있습니다. Chrome은 offscreen에서, Firefox는 background page에서 문서 Worker를 실행합니다. TXT/Markdown·HWPX와 다른 사이트의 업로드 연결은 별도 작업입니다. DOCX는 OOXML 문서만 대상으로 하며 구형 바이너리 `.doc` 파일은 지원하지 않습니다.
 
 `modules/documents/`는 추출한 텍스트와 원본 문서 위치의 연결, 내용 제거·치환, 파일 재생성을 담당합니다. 개인정보 탐지는 코어를 재사용하고 재생성 방식은 문서 형식별로 구현합니다.
 
@@ -235,3 +237,17 @@ PDF와 DOCX 모듈을 제공하며 이후 HWPX로 확장할 계획입니다. 파
 5. 사이트 모듈과 DOCX·HWPX 문서 모듈을 추가합니다.
 
 `npm test`는 Node.js 기본 테스트 러너와 LinkeDOM으로 Enter·클릭 보류, 버튼과 입력창의 연결, 한글 조합·줄바꿈 분기, 반복 입력, SPA 입력 영역 교체, 리스너 수명과 오류 시 보류를 검증합니다. 테스트는 같은 프로세스에서 실행합니다. LinkeDOM이 구현하지 않는 capture 순서·기본 form 제출과 실제 사이트 전송 여부는 Chrome에서 확인합니다. 이후 동의 전 전송·원본 업로드 방지, 승인된 내용의 한 번만 전송, 입력·첨부 변경 시 재검사, 재생성 파일의 개인정보 잔존 여부 등을 추가로 검증합니다.
+
+## 브라우저 빌드
+
+```sh
+npm run build:chrome   # Chrome Manifest V3, offscreen inference host
+npm run build:firefox  # Firefox Manifest V2, background-page inference host
+npm run test:e2e:firefox
+```
+
+Firefox에는 Chrome Offscreen API가 없어 persistent MV2 background page에서 공유 추론
+Worker를 실행합니다. Detector 메시지·취소 프로토콜은 동일하며 Firefox에서는 WASM backend를
+사용합니다. Manifest는 Firefox의 데이터 수집 동의에 `none`을 선언합니다. 브라우저 E2E는
+파일 input 재주입과 문서 모듈 Worker/WASM을 확인하지만, 실제 확장 설치 후 모델 캐시·추론 및
+각 AI 사이트의 실서비스 DOM·업로드는 배포 전에 Firefox에서 별도 수동 검증이 필요합니다.
