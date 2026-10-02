@@ -25,10 +25,17 @@ export function applyMasking(text: string, detections: readonly Detection[]): st
     occupiedUntil = end;
   }
   const counts = new Map<PiiType, number>();
+  const aliases = new Map<string, string>();
   const replacements = accepted.map(({ detection }) => {
-    const next = (counts.get(detection.type) ?? 0) + 1;
-    counts.set(detection.type, next);
-    return { ...detection.span, label: getMaskLabel(detection.type, next) };
+    const key = JSON.stringify([detection.type, text.slice(detection.span.start, detection.span.end)]);
+    let label = aliases.get(key);
+    if (!label) {
+      const next = (counts.get(detection.type) ?? 0) + 1;
+      counts.set(detection.type, next);
+      label = getMaskLabel(detection.type, next);
+      aliases.set(key, label);
+    }
+    return { ...detection.span, label };
   });
   return replacements.sort((a, b) => b.start - a.start)
     .reduce((result, item) => result.slice(0, item.start) + item.label + result.slice(item.end), text);

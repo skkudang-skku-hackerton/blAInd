@@ -21,7 +21,7 @@ const processors = { pdf: processPdf, docx: processDocx };
 
 `detector`와 `review`는 호출자가 주입해야 합니다. `alertClient`는 연결 예시의 이름이며
 제공되는 전역 객체가 아닙니다. `docs/alert-review-api.md`의 다중 세그먼트·세 그룹 계약을
-구현한 프론트 호출 함수를 연결해야 합니다. 기존 `mountPrivacyAlert`의 최종 문자열을
+구현한 프론트 호출 함수를 연결해야 합니다. 현재 `mountPrivacyAlert`의 선택된 Confirm 탐지 목록을
 결정 데이터로 역추정하거나 자동 승인하지 않습니다. 프론트는 여러 문서 요청을 순서대로
 표시하고 각 signal이 취소되면 해당 창·대기 요청을 정리해야 합니다.
 entrypoint와 실제 사이트 업로드 연결은 별도입니다.

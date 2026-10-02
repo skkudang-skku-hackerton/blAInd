@@ -1,10 +1,9 @@
-import { createFinalText } from './policy';
 import { maskPreview } from './masking';
 import type { Detection, PrivacyAnalysis } from './types';
 
 export interface PrivacyAlertOptions {
   analysis: PrivacyAnalysis;
-  onComplete: (finalText: string) => void;
+  onComplete: (selectedConfirm: readonly Detection[]) => void;
   onCancel?: () => void;
 }
 
@@ -22,6 +21,7 @@ function detectedText(text: string, detection: Detection): string {
 /** Mounts an accessible privacy review dialog. The caller owns the host and should call the returned cleanup. */
 export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOptions): () => void {
   const { analysis, onComplete, onCancel } = options;
+  const previousFocus = document.activeElement as HTMLElement | null;
   const style = document.createElement('style');
   style.textContent = alertStyles;
   const overlay = document.createElement('div');
@@ -41,11 +41,13 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
   const autoCounts = new Map<string, number>();
   for (const d of analysis.autoMaskedDetections) autoCounts.set(d.type, (autoCounts.get(d.type) ?? 0) + 1);
   description.textContent = analysis.hasConfirmItems
-    ? '일부 정보는 자동으로 가렸습니다. 아래 항목은 가릴지 선택할 수 있습니다.'
-    : '민감한 정보를 자동으로 보호했습니다.';
+    ? '자동 보호 항목은 항상 가려집니다. 아래 항목은 가릴지 선택할 수 있습니다.'
+    : analysis.autoMaskedDetections.length > 0
+      ? '민감한 정보는 자동으로 가려집니다.'
+      : '탐지된 개인정보가 없습니다. 내용을 확인하고 진행해 주세요.';
   if (autoCounts.size) {
     const summary = [...autoCounts].map(([type, count]) => `${labels[type] ?? type} ${count}개`).join(' · ');
-    auto.textContent = `자동 보호 완료  ${summary}`;
+    auto.textContent = `자동 보호 대상  ${summary}`;
   } else auto.remove();
 
   analysis.confirmDetections.forEach((detection, index) => {
@@ -64,12 +66,17 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     items.append(row);
   });
   if (!analysis.hasConfirmItems) overlay.querySelector('.blaind-alert-list')?.remove();
+  const cancelButton = overlay.querySelector<HTMLButtonElement>('.blaind-alert-cancel')!;
   const keep = overlay.querySelector<HTMLButtonElement>('.blaind-alert-keep')!;
   const mask = overlay.querySelector<HTMLButtonElement>('.blaind-alert-mask')!;
   if (!analysis.hasConfirmItems) mask.remove();
   else keep.textContent = '선택 없이 진행';
 
-  const finish = (text: string) => { cleanup(); onComplete(text); };
+  let finished = false;
+  const finish = (selectedConfirm: readonly Detection[]) => {
+    if (finished) return;
+    cleanup(); onComplete(selectedConfirm);
+  };
   const selected = () => [...items.querySelectorAll<HTMLInputElement>('input:checked')]
     .flatMap((input) => {
       const detection = analysis.confirmDetections[Number(input.value)];
@@ -80,21 +87,25 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     if (event.key === 'Tab') {
       const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)')];
       const first = focusable[0], last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      if (event.shiftKey && (host.getRootNode() as Document | ShadowRoot).activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && (host.getRootNode() as Document | ShadowRoot).activeElement === last) { event.preventDefault(); first?.focus(); }
     }
   };
-  const cancel = () => { cleanup(); onCancel?.(); };
+  const cancel = () => { if (finished) return; cleanup(); onCancel?.(); };
   const onBackdrop = (event: MouseEvent) => { if (event.target === overlay) cancel(); };
-  const onKeep = () => finish(createFinalText(analysis));
-  const onMask = () => finish(createFinalText(analysis, selected()));
+  const onKeep = () => finish([]);
+  const onMask = () => finish(selected());
   const cleanup = () => {
+    finished = true;
     document.removeEventListener('keydown', onKey);
+    cancelButton.removeEventListener('click', cancel);
     overlay.removeEventListener('click', onBackdrop);
     keep.removeEventListener('click', onKeep); mask.removeEventListener('click', onMask);
     overlay.remove(); style.remove();
+    if (previousFocus?.isConnected) previousFocus.focus();
   };
   document.addEventListener('keydown', onKey);
+  cancelButton.addEventListener('click', cancel);
   overlay.addEventListener('click', onBackdrop);
   keep.addEventListener('click', onKeep); mask.addEventListener('click', onMask);
   dialog.focus();

@@ -21,7 +21,7 @@ const processors = { pdf: processPdf };
 
 `alertClient`는 연결 예시의 의존성 이름이지 현재 제공되는 전역 객체가 아닙니다.
 현재 `src/alert/PrivacyAlert.ts`의
-`mountPrivacyAlert`는 최종 문자열을 반환하는 UI입니다. 문서의 다중 세그먼트·세 그룹
+`mountPrivacyAlert`는 단일 텍스트에서 선택한 Confirm 탐지 목록을 반환하는 UI입니다. 문서의 다중 세그먼트·세 그룹
 계약을 구현한 프론트 호출 함수를 `review`에 연결해야 합니다. PDF 모듈이 최종 문자열에서
 사용자의 선택을 역추정하지 않습니다. 프론트는 여러 문서 요청을 순서대로 표시하고,
 각 호출의 signal이 취소되면 해당 창·대기 요청을 정리해야 합니다.
