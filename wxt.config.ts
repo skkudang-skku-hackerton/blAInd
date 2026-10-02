@@ -25,6 +25,10 @@ export default defineConfig({
     ...(browser === 'chrome' ? { minimum_chrome_version: '116' } : {}),
     permissions: browser === 'chrome' ? ['offscreen', 'unlimitedStorage'] : ['unlimitedStorage'],
     host_permissions: ['https://huggingface.co/*', 'https://*.hf.co/*'],
+    web_accessible_resources: [{
+      resources: ['document-review.html'],
+      matches: ['https://chatgpt.com/*', 'https://claude.ai/*', 'https://gemini.google.com/*'],
+    }],
     content_security_policy: manifestVersion === 3
       ? { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; worker-src 'self'" }
       : "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",

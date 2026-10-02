@@ -22,12 +22,22 @@ function detectedText(text: string, detection: Detection): string {
 
 /** Mounts an accessible privacy review dialog. The caller owns the host and should call the returned cleanup. */
 export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOptions): () => void {
+  const document = host.ownerDocument;
   const { analysis, onComplete, onCancel } = options;
   const previousFocus = document.activeElement as HTMLElement | null;
   const style = document.createElement('style');
   style.textContent = alertStyles;
   const overlay = document.createElement('div');
   overlay.className = 'blaind-alert-backdrop';
+  // Shadow DOM isolates styles, but composed UI events still reach the site's
+  // delegated handlers. Stop bubbling after our controls have handled them.
+  // Keep these listeners on the detached overlay during cleanup too: the click
+  // that approves/cancels is still in flight when its button removes the dialog.
+  for (const type of [
+    'click', 'dblclick', 'contextmenu', 'pointerdown', 'pointerup',
+    'mousedown', 'mouseup', 'touchstart', 'touchend',
+    'keydown', 'keypress', 'keyup', 'input', 'change', 'focusin', 'focusout',
+  ]) overlay.addEventListener(type, event => event.stopPropagation());
   overlay.innerHTML = `<section class="blaind-alert" role="dialog" aria-modal="true" aria-labelledby="blaind-alert-title" aria-describedby="blaind-alert-description" tabindex="-1">
     <header class="blaind-alert-header"><span class="blaind-alert-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M16 3.5 27 8v7.1c0 6.5-4.5 11.2-11 13.4C9.5 26.3 5 21.6 5 15.1V8l11-4.5Z" stroke="currentColor" stroke-width="2"/><path d="m11.3 15.7 3.1 3.1 6.6-6.7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><p class="blaind-alert-eyebrow"><span class="blaind-alert-live-dot"></span> blAInd <span class="blaind-alert-eyebrow-divider">/</span> PRIVACY CHECK</p><h2 id="blaind-alert-title">보내기 전에 확인해 주세요</h2></div></header>
     <p id="blaind-alert-description" class="blaind-alert-description"></p>
@@ -98,15 +108,16 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
   const onKeep = () => finish([]);
   const onMask = () => finish(selected());
   const cleanup = () => {
+    if (finished) return;
     finished = true;
-    document.removeEventListener('keydown', onKey);
+    overlay.removeEventListener('keydown', onKey);
     cancelButton.removeEventListener('click', cancel);
     overlay.removeEventListener('click', onBackdrop);
     keep.removeEventListener('click', onKeep); mask.removeEventListener('click', onMask);
     overlay.remove(); style.remove();
     if (previousFocus?.isConnected) previousFocus.focus();
   };
-  document.addEventListener('keydown', onKey);
+  overlay.addEventListener('keydown', onKey);
   cancelButton.addEventListener('click', cancel);
   overlay.addEventListener('click', onBackdrop);
   keep.addEventListener('click', onKeep); mask.addEventListener('click', onMask);

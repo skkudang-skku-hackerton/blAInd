@@ -60,21 +60,22 @@ test('built extension: intercept → offscreen document worker → modal → mas
       const flow = (window as any).documentFlow;
       return { errors: flow.errors, uploads: flow.uploads.map((upload: { name: string }) => upload.name) };
     });
+    const review = page.frameLocator('#blaind-document-review iframe');
     for (const [name, buffer, mask] of [
       ['input.pdf', pdf(), true], ['input.pdf', pdf(), false], ['input.docx', docx(), true],
     ] as const) {
       const before = (await state()).uploads.length;
       await page.locator('input[type=file]').setInputFiles({ name, mimeType: name.endsWith('pdf') ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer });
-      await expect(page.getByRole('dialog')).toBeVisible();
+      await expect(review.getByRole('dialog')).toBeVisible();
       console.info('Document flow: review visible', name, mask);
       expect((await state()).uploads).toHaveLength(before);
-      await expect(page.getByText('김민수', { exact: true })).toBeVisible();
+      await expect(review.getByText('김민수', { exact: true })).toBeVisible();
       console.info('Document flow: name visible');
       if (mask) {
-        await page.getByRole('checkbox').check();
+        await review.getByRole('checkbox').check();
         console.info('Document flow: name selected');
-        await page.getByRole('button', { name: '선택 항목 가리고 진행' }).click();
-      } else await page.getByRole('button', { name: '선택 없이 진행' }).click();
+        await review.getByRole('button', { name: '선택 항목 가리고 진행' }).click();
+      } else await review.getByRole('button', { name: '선택 없이 진행' }).click();
       await expect.poll(async () => (await state()).uploads.length).toBe(before + 1);
       console.info('Document flow: masked file attached', name, mask);
       const upload = await page.evaluate(() => {
@@ -98,9 +99,9 @@ test('built extension: intercept → offscreen document worker → modal → mas
     }
     const before = (await state()).uploads.length;
     await page.locator('input[type=file]').setInputFiles({ name: 'cancel.pdf', mimeType: 'application/pdf', buffer: pdf() });
-    await expect(page.getByRole('dialog')).toBeVisible();
-    await page.getByRole('button', { name: '취소', exact: true }).click();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(review.getByRole('dialog')).toBeVisible();
+    await review.getByRole('button', { name: '취소', exact: true }).click();
+    await expect(page.locator('#blaind-document-review')).toHaveCount(0);
     expect((await state()).uploads).toHaveLength(before);
     expect((await state()).errors).toEqual([]);
   } finally { await context.close(); await devServer?.stop(); await rm(directory, { recursive: true, force: true }); }
