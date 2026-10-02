@@ -9,9 +9,9 @@
   "scripts": {
     "dev": "wxt",
     "build": "wxt build",
-    "test": "node --experimental-strip-types --test --experimental-test-isolation=none tests/unit/text-submit-interceptor.test.mjs",
+    "test": "vitest run && npm run test:node",
+    "test:node": "node --experimental-strip-types --test --experimental-test-isolation=none tests/unit/text-submit-interceptor.test.mjs",
     "typecheck": "wxt prepare && tsc --noEmit",
-    "test": "vitest run",
     "test:e2e": "playwright test",
     "postinstall": "wxt prepare"
   },
