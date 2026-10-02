@@ -1,4 +1,4 @@
-import type { Detection, PiiType } from './types';
+import type { Detection, PiiType } from '../../alert/types';
 
 export function getMaskLabel(type: PiiType, index: number): string {
   return `[${type}_${index}]`;

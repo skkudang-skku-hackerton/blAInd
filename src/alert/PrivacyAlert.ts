@@ -1,10 +1,10 @@
-import { createFinalText } from './policy';
-import { maskPreview } from './masking';
-import type { Detection, PrivacyAnalysis } from './types';
+import { buildReviewResult } from './policy';
+import type { ApprovedReview, Detection, PrivacyAnalysis } from './types';
 
 export interface PrivacyAlertOptions {
   analysis: PrivacyAnalysis;
-  onComplete: (finalText: string) => void;
+  onComplete: (result: ApprovedReview) => void;
+  onSelectionChange?: (detection: Detection, masking: boolean) => void;
   onCancel?: () => void;
 }
 
@@ -41,11 +41,11 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
   const autoCounts = new Map<string, number>();
   for (const d of analysis.autoMaskedDetections) autoCounts.set(d.type, (autoCounts.get(d.type) ?? 0) + 1);
   description.textContent = analysis.hasConfirmItems
-    ? '일부 정보는 자동으로 가렸습니다. 아래 항목은 가릴지 선택할 수 있습니다.'
-    : '민감한 정보를 자동으로 보호했습니다.';
+    ? '자동 보호 대상은 항상 마스킹됩니다. 아래 항목은 가릴지 선택할 수 있습니다.'
+    : '아래 정보는 처리 모듈에서 자동으로 마스킹됩니다.';
   if (autoCounts.size) {
     const summary = [...autoCounts].map(([type, count]) => `${labels[type] ?? type} ${count}개`).join(' · ');
-    auto.textContent = `자동 보호 완료  ${summary}`;
+    auto.textContent = `자동 보호 대상  ${summary}`;
   } else auto.remove();
 
   analysis.confirmDetections.forEach((detection, index) => {
@@ -54,6 +54,7 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     row.className = 'blaind-alert-item';
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox'; checkbox.value = String(index);
+    checkbox.addEventListener('change', () => options.onSelectionChange?.(detection, checkbox.checked));
     checkbox.setAttribute('aria-label', `${labels[detection.type] ?? detection.type} 가리기`);
     const content = document.createElement('span'); content.className = 'blaind-alert-item-copy';
     const kind = document.createElement('span'); kind.className = 'blaind-alert-kind';
@@ -66,12 +67,18 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
   if (!analysis.hasConfirmItems) overlay.querySelector('.blaind-alert-list')?.remove();
   const keep = overlay.querySelector<HTMLButtonElement>('.blaind-alert-keep')!;
   const mask = overlay.querySelector<HTMLButtonElement>('.blaind-alert-mask')!;
+  const cancelButton = overlay.querySelector<HTMLButtonElement>('.blaind-alert-cancel')!;
   if (!analysis.hasConfirmItems) mask.remove();
   else keep.textContent = '선택 없이 진행';
 
-  const finish = (text: string) => { cleanup(); onComplete(text); };
+  const finish = (selectedConfirm: readonly Detection[]) => {
+    const result = buildReviewResult(analysis, selectedConfirm);
+    cleanup();
+    onComplete(result);
+  };
   const selected = () => [...items.querySelectorAll<HTMLInputElement>('input:checked')]
-    .map((input) => analysis.confirmDetections[Number(input.value)]);
+    .map((input) => analysis.confirmDetections[Number(input.value)])
+    .filter((detection): detection is Detection => detection !== undefined);
   const onKey = (event: KeyboardEvent) => {
     if (event.key === 'Escape') { event.preventDefault(); cancel(); }
     if (event.key === 'Tab') {
@@ -83,24 +90,21 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
   };
   const cancel = () => { cleanup(); onCancel?.(); };
   const onBackdrop = (event: MouseEvent) => { if (event.target === overlay) cancel(); };
-  const onKeep = () => finish(createFinalText(analysis));
-  const onMask = () => finish(createFinalText(analysis, selected()));
+  const onKeep = () => finish([]);
+  const onMask = () => finish(selected());
   const cleanup = () => {
     document.removeEventListener('keydown', onKey);
     overlay.removeEventListener('click', onBackdrop);
     keep.removeEventListener('click', onKeep); mask.removeEventListener('click', onMask);
+    cancelButton.removeEventListener('click', cancel);
     overlay.remove(); style.remove();
   };
   document.addEventListener('keydown', onKey);
   overlay.addEventListener('click', onBackdrop);
   keep.addEventListener('click', onKeep); mask.addEventListener('click', onMask);
+  cancelButton.addEventListener('click', cancel);
   dialog.focus();
   return cleanup;
-}
-
-export function getDetectionPreview(text: string, detection: Detection, autoMasked = false): string {
-  const value = detectedText(text, detection);
-  return autoMasked ? maskPreview(value, detection.type) : value;
 }
 
 const alertStyles = `

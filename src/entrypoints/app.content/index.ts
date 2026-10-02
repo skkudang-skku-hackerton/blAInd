@@ -1,4 +1,5 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
+import { mountMockAlertPreview } from '../../alert/mock_data/preview';
 import { createHoldNotice } from '../../features/review/hold-notice';
 import { getTextSiteAdapter } from '../../modules/sites/text-adapters';
 import { createTextSubmitInterceptor } from '../../modules/text';
@@ -19,6 +20,10 @@ export default defineContentScript({
     if (!site) return;
 
     console.info(`[blAInd] Content Script ready: ${site.name}`);
+
+    if (import.meta.env.DEV) {
+      ctx.onInvalidated(mountMockAlertPreview());
+    }
 
     const notice = createHoldNotice();
     const interceptor = createTextSubmitInterceptor({

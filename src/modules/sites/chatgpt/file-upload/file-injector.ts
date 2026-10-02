@@ -34,7 +34,7 @@ export function resolveFileInput(
     const byAccept = inputs.find((input) => input.accept === acceptHint);
     if (byAccept) return byAccept;
   }
-  return inputs.find((input) => !input.hidden && input.offsetParent !== null) ?? inputs[inputs.length - 1];
+  return inputs.find((input) => !input.hidden && input.offsetParent !== null) ?? inputs[inputs.length - 1] ?? null;
 }
 
 /** input[type=file] 에 파일을 주입하고 change 를 재발행한다. 성공 여부를 반환. */

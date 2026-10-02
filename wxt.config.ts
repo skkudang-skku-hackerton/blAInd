@@ -1,12 +1,13 @@
 import { defineConfig } from 'wxt';
 import { readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { mockAlertTerminalPlugin } from './src/alert/mock_data/terminal-server';
 
 export default defineConfig({
   srcDir: 'src',
   manifestVersion: 3,
   modules: ['@wxt-dev/module-react'],
-  vite: () => ({ worker: { format: 'es' } }),
+  vite: () => ({ worker: { format: 'es' }, plugins: [mockAlertTerminalPlugin()] }),
   manifest: {
     name: 'blAInd',
     description: 'AI 웹페이지에서 전송 전 개인정보 마스킹을 돕는 확장 프로그램',

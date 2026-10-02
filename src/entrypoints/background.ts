@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
+import { installMockReviewLogger } from '../alert/mock_data/terminal-client';
 import {
   isBackgroundStatusRequest,
   type BackgroundStatusResponse,
@@ -79,6 +80,7 @@ export function installPiiBackground(runtime: MessagingRuntime, offscreen: Offsc
 }
 
 export default defineBackground(() => {
+  if (import.meta.env.DEV) installMockReviewLogger();
   installPiiBackground(browser.runtime as unknown as MessagingRuntime,
     browser.offscreen as unknown as OffscreenApi, browser.tabs as unknown as StatusTabs);
   // 동기적으로 등록하고, 이 진입점의 요청에만 응답합니다.
