@@ -2,6 +2,7 @@ import { createReviewRequest, resolveReview } from './review';
 import { openPdfInWorker } from './worker-client';
 import { DEFAULT_LIMITS, type PdfProcessorOptions, type PdfSession } from './types';
 import { abortable } from '../shared/abortable';
+import { readFileBytes } from '../shared/read-file';
 
 export { abortable } from '../shared/abortable';
 
@@ -16,7 +17,7 @@ export function createPdfProcessor(options: PdfProcessorOptions) {
       signal.throwIfAborted();
       if (!file.size || file.size > limits.maxInputBytes) throw new Error('PDF input size limit exceeded');
       options.onStage?.('extracting', file);
-      const bytes = await abortable(file.arrayBuffer(), signal);
+      const bytes = await readFileBytes(file, signal);
       signal.throwIfAborted();
       session = await (options.openPdf ?? openPdfInWorker)(bytes, limits, signal);
       signal.throwIfAborted();
