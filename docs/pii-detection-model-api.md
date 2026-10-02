@@ -259,7 +259,7 @@ The detector is unaware of the original file format.
 ## 7. `Detection`
 
 ```ts
-export interface Detection {
+export interface DetectionConstituent {
   type: PiiType;
 
   confidence: number;
@@ -268,6 +268,10 @@ export interface Detection {
     start: number;
     end: number;
   };
+}
+
+export interface Detection extends DetectionConstituent {
+  constituents?: DetectionConstituent[];
 }
 ```
 
@@ -510,6 +514,37 @@ Therefore the same entity may temporarily be detected multiple times.
 The detector is responsible for merging or deduplicating such duplicates before returning the final result.
 
 Callers should not need to remove duplicate detections created by internal chunking.
+
+### Non-overlapping regions without losing coverage
+
+`scanText()` and each `scanSegments()` result return regions sorted by start offset.
+Top-level spans do not overlap; adjacent spans remain separate. Reconciliation
+preserves the union of all detected characters, including the extra boundaries of
+near-duplicates. It must not suppress a conflicting prediction and lose its coverage.
+
+Remaining overlapping detections form one region spanning their union. Such a
+region includes `constituents`, retaining the reconciled detections' individual
+types, confidence scores, and original UTF-16 spans. Constituents can overlap;
+they have no nested `constituents`. The outer type/confidence identify a preferred
+representative (complete before clipped, then confidence, length, and stable
+tie-breakers), rather than classifying every character of the merged region.
+
+For example, PHONE `[0,5)` and PERSON `[3,10)` become one region `[0,10)` with
+both detections as constituents. A caller may highlight the outer region, but
+must expand constituents before applying type policies or asking for user choices:
+
+```ts
+import { expandDetections } from '../src/core/api';
+
+const regions = await detector.scanText(text);
+const policyItems = expandDetections(regions);
+// Classify/select policyItems first; mask only the union of selected item spans.
+```
+
+Masking PHONE automatically must not also mask the PERSON-only suffix `[5,10)`
+unless the user selects that PERSON item. Text analysis and document review
+expand constituents before making these policy decisions. RPC preserves and
+validates the metadata and its union coverage.
 
 ---
 
@@ -871,7 +906,7 @@ interface TextSegment {
   text: string;
 }
 
-interface Detection {
+interface DetectionConstituent {
   type: PiiType;
   confidence: number;
 
@@ -879,6 +914,10 @@ interface Detection {
     start: number;
     end: number;
   };
+}
+
+interface Detection extends DetectionConstituent {
+  constituents?: DetectionConstituent[];
 }
 
 interface SegmentDetectionResult {

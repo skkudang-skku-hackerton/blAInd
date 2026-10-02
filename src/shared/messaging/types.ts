@@ -1,6 +1,6 @@
 import { PII_TYPES } from '../../core/pii/types';
 import { PiiError } from '../../core/api/errors';
-import type { Detection, PiiDetectorStatus, PiiErrorCode, SegmentDetectionResult, TextSegment } from '../../core/api/types';
+import type { Detection, DetectionConstituent, PiiDetectorStatus, PiiErrorCode, SegmentDetectionResult, TextSegment } from '../../core/api/types';
 
 export const PII_CHANNEL = 'blaind:pii:v1';
 export const DEFAULT_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
@@ -106,14 +106,34 @@ export function errorResponse(requestId: string, error: unknown, fallback: PiiEr
   const safe = error instanceof PiiError ? error : new PiiError(fallback, 'PII request failed.');
   return { channel: PII_CHANNEL, requestId, type: 'pii:error', error: { code: safe.code, message: safe.message } };
 }
-function isDetections(value: unknown, length: number): value is Detection[] {
-  return Array.isArray(value) && Array.from(value).every(detection => isRecord(detection) &&
+function isConstituent(detection: unknown, length: number): detection is DetectionConstituent {
+  return isRecord(detection) &&
     PII_TYPES.includes(detection.type as typeof PII_TYPES[number]) &&
     typeof detection.confidence === 'number' && Number.isFinite(detection.confidence) &&
     detection.confidence >= 0 && detection.confidence <= 1 && isRecord(detection.span) &&
     Number.isInteger(detection.span.start) && Number.isInteger(detection.span.end) &&
     (detection.span.start as number) >= 0 && (detection.span.end as number) > (detection.span.start as number) &&
-    (detection.span.end as number) <= length);
+    (detection.span.end as number) <= length;
+}
+function isDetection(value: unknown, length: number): value is Detection {
+  if (!isConstituent(value, length)) return false;
+  const detection = value as Detection;
+  if (detection.constituents === undefined) return true;
+  const members: unknown = detection.constituents;
+  if (!Array.isArray(members) || members.length < 2 || !Array.from(members).every(member =>
+    isConstituent(member, length) && !('constituents' in member) &&
+    member.span.start >= detection.span.start && member.span.end <= detection.span.end)) return false;
+  const sorted = [...members as DetectionConstituent[]].sort((a, b) => a.span.start - b.span.start);
+  if (sorted[0]!.span.start !== detection.span.start) return false;
+  let end = sorted[0]!.span.end;
+  for (const member of sorted.slice(1)) {
+    if (member.span.start >= end) return false;
+    end = Math.max(end, member.span.end);
+  }
+  return end === detection.span.end;
+}
+function isDetections(value: unknown, length: number): value is Detection[] {
+  return Array.isArray(value) && Array.from(value).every(detection => isDetection(detection, length));
 }
 export function validateResponse(value: unknown, request: PiiRequest): PiiResponse {
   const invalid = () => new PiiError('INFERENCE_FAILED', 'Invalid PII RPC response.');
