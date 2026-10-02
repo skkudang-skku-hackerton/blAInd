@@ -20,8 +20,22 @@ export function readFileBytes(file: Blob, signal: AbortSignal): Promise<ArrayBuf
     reader.onload = () => {
       const result = reader.result;
       cleanup();
-      if (result instanceof ArrayBuffer) resolve(result);
-      else reject(new Error('Invalid file reader result'));
+      // FileReader guarantees ArrayBuffer | string | null. Firefox may expose
+      // a buffer from another realm, where instanceof ArrayBuffer is false.
+      if (result === null || typeof result === 'string') {
+        reject(new Error('Invalid file reader result'));
+        return;
+      }
+      try {
+        // Copy into our realm without consulting the source's constructor or
+        // species (as ArrayBuffer#slice would). Keep later processing local.
+        const source = new Uint8Array(result);
+        const bytes = new Uint8Array(source.byteLength);
+        bytes.set(source);
+        resolve(bytes.buffer);
+      } catch (error) {
+        reject(error);
+      }
     };
     reader.onerror = () => {
       const error = reader.error;
