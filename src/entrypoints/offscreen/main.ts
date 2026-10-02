@@ -2,8 +2,10 @@ import { browser } from 'wxt/browser';
 import { installPiiServer } from '../../shared/messaging/pii-server';
 import { PII_CHANNEL, type MessagingRuntime } from '../../shared/messaging/types';
 import { createWorkerRpc } from './rpc';
+import { installDocumentServer } from '../../shared/messaging/document-server';
 
 const runtime = browser.runtime as unknown as MessagingRuntime;
+const removeDocumentServer = installDocumentServer(runtime);
 const rpc = createWorkerRpc({
   createWorker: () => new Worker(new URL('./inference.worker.ts', import.meta.url), { type: 'module' }),
   onStatus: status => {
@@ -12,4 +14,4 @@ const rpc = createWorkerRpc({
   },
 });
 const removeServer = installPiiServer(runtime, 'offscreen', (request, signal) => rpc.request(request, signal));
-window.addEventListener('pagehide', () => { removeServer(); rpc.dispose(); }, { once: true });
+window.addEventListener('pagehide', () => { removeDocumentServer(); removeServer(); rpc.dispose(); }, { once: true });

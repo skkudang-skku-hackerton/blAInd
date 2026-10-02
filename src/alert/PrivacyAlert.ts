@@ -85,8 +85,9 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     if (event.key === 'Tab') {
       const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)')];
       const first = focusable[0], last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      const root = host.getRootNode() as Document | ShadowRoot;
+      if (event.shiftKey && root.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && root.activeElement === last) { event.preventDefault(); first?.focus(); }
     }
   };
   const cancel = () => { cleanup(); onCancel?.(); };

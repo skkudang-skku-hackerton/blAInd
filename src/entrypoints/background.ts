@@ -5,6 +5,7 @@ import {
   type BackgroundStatusResponse,
 } from '../shared/messaging/protocol';
 import { PiiError } from '../core/api/errors';
+import { DOCUMENT_CHANNEL } from '../shared/messaging/document-client';
 import { installPiiServer, cancelledError } from '../shared/messaging/pii-server';
 import { cancelMessage, errorResponse, isStatusMessage, ownsSender, PII_CHANNEL, requestTimeout, validateResponse,
   type MessageListener, type MessagingRuntime } from '../shared/messaging/types';
@@ -79,6 +80,16 @@ export function installPiiBackground(runtime: MessagingRuntime, offscreen: Offsc
 }
 
 export default defineBackground(() => {
+  const ensureDocumentHost = createOffscreenManager(browser.offscreen as unknown as OffscreenApi);
+  browser.runtime.onMessage.addListener((message, sender, respond) => {
+    if (message?.channel !== DOCUMENT_CHANNEL || message.target !== 'background' ||
+        sender.id !== browser.runtime.id || typeof message.sessionId !== 'string') return;
+    const owner = JSON.stringify([sender.tab?.id ?? 'extension', sender.documentId ?? sender.url, sender.frameId]);
+    void ensureDocumentHost().then(() => browser.runtime.sendMessage({
+      ...message, owner, target: 'offscreen',
+    })).then(respond, () => respond({ ok: false, error: 'Document host unavailable' }));
+    return true;
+  });
   installPiiBackground(browser.runtime as unknown as MessagingRuntime,
     browser.offscreen as unknown as OffscreenApi, browser.tabs as unknown as StatusTabs);
   // 동기적으로 등록하고, 이 진입점의 요청에만 응답합니다.
