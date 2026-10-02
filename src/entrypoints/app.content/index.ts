@@ -1,4 +1,10 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
+import { browser } from 'wxt/browser';
+import { createFileUploadInterceptor } from '../../modules/sites/chatgpt/file-upload';
+import { createPdfProcessor } from '../../modules/documents/pdf';
+import { createPiiDetectorClient } from '../../shared/messaging/pii-client';
+import { createRemotePdfOpener } from '../../shared/messaging/pdf-session';
+import { createPdfReviewQueue } from '../../features/review/pdf-review';
 import { mountMockAlertPreview } from '../../alert/mock_data/preview';
 import { createHoldNotice } from '../../features/review/hold-notice';
 import { getTextSiteAdapter } from '../../modules/sites/text-adapters';
@@ -26,6 +32,40 @@ export default defineContentScript({
     }
 
     const notice = createHoldNotice();
+    if (site.id === 'chatgpt') {
+      const detector = createPiiDetectorClient();
+      const reviews = createPdfReviewQueue();
+      detector.onStatus(status => {
+        if (status.state === 'downloading') notice.show(`개인정보 탐지 모델 다운로드 중: ${Math.round(status.progress * 100)}%. 최초 검사 시 시간이 걸릴 수 있습니다.`);
+        if (status.state === 'loading') notice.show('개인정보 탐지 모델을 준비하고 있습니다. 원본 PDF 첨부는 보류 중입니다.');
+      });
+      const processor = createPdfProcessor({
+        detector,
+        openPdf: createRemotePdfOpener(request => browser.runtime.sendMessage(request)),
+        review: reviews.review,
+        onStage(stage) {
+          console.info(`[blAInd:pdf] ${stage}`);
+          if (stage === 'reviewing') notice.dispose();
+        },
+        onError(error) {
+          console.error('[blAInd:pdf] Processing failed', error);
+          notice.show('PDF 처리에 실패해 첨부를 보류했습니다. 텍스트 PDF(25MB 이하)로 다시 시도해 주세요.');
+        },
+      });
+      const files = createFileUploadInterceptor({
+        processors: { pdf: processor },
+        unhandled: 'hold',
+        onProcessed() { console.info('[blAInd:pdf] Masked PDF attached'); },
+        onSkipped({ reason }) {
+          notice.show(reason === 'unhandled' ? '현재 파일 검사는 PDF만 지원합니다. Word 등 다른 파일은 첨부하지 않았습니다.' : 'PDF 첨부를 보류했습니다. 취소했거나 처리할 수 없는 파일입니다.');
+        },
+        onError() { notice.show('처리한 PDF를 첨부하지 못했습니다. 다시 시도해 주세요.'); },
+      });
+      files.start();
+      const stop = () => { files.stop(); reviews.dispose(); detector.dispose(); };
+      window.addEventListener('pagehide', stop, { once: true });
+      ctx.onInvalidated(() => { stop(); window.removeEventListener('pagehide', stop); });
+    }
     const interceptor = createTextSubmitInterceptor({
       adapter: getTextSiteAdapter(site.id),
       onIntercept({ text, source }) {

@@ -6,6 +6,7 @@ export interface PrivacyAlertOptions {
   onComplete: (result: ApprovedReview) => void;
   onSelectionChange?: (detection: Detection, masking: boolean) => void;
   onCancel?: () => void;
+  itemContext?: (detection: Detection) => string;
 }
 
 const labels: Record<string, string> = {
@@ -42,7 +43,7 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
   for (const d of analysis.autoMaskedDetections) autoCounts.set(d.type, (autoCounts.get(d.type) ?? 0) + 1);
   description.textContent = analysis.hasConfirmItems
     ? '자동 보호 대상은 항상 마스킹됩니다. 아래 항목은 가릴지 선택할 수 있습니다.'
-    : '아래 정보는 처리 모듈에서 자동으로 마스킹됩니다.';
+    : analysis.autoMaskedDetections.length ? '아래 정보는 처리 모듈에서 자동으로 마스킹됩니다.' : '개인정보가 탐지되지 않았습니다. 확인 후 진행해 주세요.';
   if (autoCounts.size) {
     const summary = [...autoCounts].map(([type, count]) => `${labels[type] ?? type} ${count}개`).join(' · ');
     auto.textContent = `자동 보호 대상  ${summary}`;
@@ -58,7 +59,7 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     checkbox.setAttribute('aria-label', `${labels[detection.type] ?? detection.type} 가리기`);
     const content = document.createElement('span'); content.className = 'blaind-alert-item-copy';
     const kind = document.createElement('span'); kind.className = 'blaind-alert-kind';
-    kind.textContent = labels[detection.type] ?? detection.type;
+    kind.textContent = [options.itemContext?.(detection), labels[detection.type] ?? detection.type].filter(Boolean).join(' · ');
     const value = document.createElement('span'); value.className = 'blaind-alert-value';
     value.textContent = detectedText(analysis.originalText, detection);
     content.append(kind, value); row.append(checkbox, content); row.htmlFor = inputId; checkbox.id = inputId;

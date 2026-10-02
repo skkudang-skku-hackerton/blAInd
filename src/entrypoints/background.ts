@@ -1,4 +1,5 @@
 import { browser } from 'wxt/browser';
+import { PDF_CHANNEL, type PdfRequest } from '../shared/messaging/pdf-session';
 import { defineBackground } from 'wxt/utils/define-background';
 import { installMockReviewLogger } from '../alert/mock_data/terminal-client';
 import {
@@ -80,6 +81,15 @@ export function installPiiBackground(runtime: MessagingRuntime, offscreen: Offsc
 }
 
 export default defineBackground(() => {
+  const ensurePdfOffscreen = createOffscreenManager(browser.offscreen as unknown as OffscreenApi);
+  browser.runtime.onMessage.addListener((message, sender, respond) => {
+    if (sender.id !== browser.runtime.id || message?.channel !== PDF_CHANNEL || message.target !== 'background') return;
+    const owner = JSON.stringify([sender.tab?.id ?? 'extension', sender.documentId ?? sender.url, sender.frameId]);
+    void ensurePdfOffscreen().then(() => browser.runtime.sendMessage({
+      ...message, target: 'offscreen', owner,
+    } satisfies PdfRequest)).then(respond, () => respond({ ok: false, error: 'PDF 실행 환경을 시작하지 못했습니다.' }));
+    return true;
+  });
   if (import.meta.env.DEV) installMockReviewLogger();
   installPiiBackground(browser.runtime as unknown as MessagingRuntime,
     browser.offscreen as unknown as OffscreenApi, browser.tabs as unknown as StatusTabs);
