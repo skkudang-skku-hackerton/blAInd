@@ -54,12 +54,18 @@ export interface PiiDetectorApi {
   initialize(): Promise<void>;
 
   scanText(
-    text: string
+    text: string,
+    options?: ScanOptions
   ): Promise<Detection[]>;
 
   scanSegments(
-    segments: TextSegment[]
+    segments: TextSegment[],
+    options?: ScanOptions
   ): Promise<SegmentDetectionResult[]>;
+}
+
+export interface ScanOptions {
+  signal?: AbortSignal;
 }
 ```
 
@@ -98,7 +104,8 @@ The final implementation should use one behavior consistently.
 
 ```ts
 scanText(
-  text: string
+  text: string,
+  options?: ScanOptions
 ): Promise<Detection[]>;
 ```
 
@@ -147,7 +154,8 @@ Callers must not manually chunk text for model-length reasons.
 
 ```ts
 scanSegments(
-  segments: TextSegment[]
+  segments: TextSegment[],
+  options?: ScanOptions
 ): Promise<SegmentDetectionResult[]>;
 ```
 
@@ -634,7 +642,8 @@ export type PiiErrorCode =
   | "MODEL_LOAD_FAILED"
   | "INFERENCE_FAILED"
   | "OUT_OF_MEMORY"
-  | "INVALID_INPUT";
+  | "INVALID_INPUT"
+  | "CANCELLED";
 ```
 
 Recommended error shape:
@@ -648,6 +657,8 @@ export interface PiiDetectorError {
 ```
 
 Callers should branch on `code`, not on raw ONNX/runtime error strings.
+
+Cancellation rejects the affected scan with `code: "CANCELLED"`; it must not return an empty or partial detection result. An empty result means the scan completed without finding PII, not that it was cancelled.
 
 ---
 
@@ -726,6 +737,85 @@ Callers must only use the public client wrapper.
 
 They should not communicate directly with the inference worker.
 
+### Request-scoped cancellation
+
+`scanText` and `scanSegments` accept an optional second argument:
+
+```ts
+export interface ScanOptions {
+  signal?: AbortSignal;
+}
+```
+
+Existing calls remain valid without any changes. `initialize()` remains unchanged; cancellation of one scan must not cancel shared initialization or unload the model.
+
+Use a separate `AbortController` for each independently cancellable scan:
+
+```ts
+const controller = new AbortController();
+
+const pending = detector.scanSegments(segments, {
+  signal: controller.signal
+});
+
+// Attach an error handler before cancellation can occur.
+const handled = pending.catch((error: PiiDetectorError) => {
+  if (error.code === "CANCELLED") return null;
+  throw error;
+});
+
+controller.abort();
+const results = await handled;
+```
+
+Document processors can forward the signal already supplied by the file uploader:
+
+```ts
+const results = await detector.scanSegments(segments, { signal });
+```
+
+They must still check `signal.aborted` before rewriting or returning a file: the request can be cancelled after detection has completed. The processor should translate `CANCELLED` into its existing `null` result rather than uploading the original file.
+
+#### Required behavior
+
+- Each scan invocation has its own internal request ID, even when no signal is provided.
+- Aborting a signal cancels only scans associated with that signal. Other requests continue normally. Reusing one signal intentionally cancels all scans using it.
+- An already-aborted signal rejects with `CANCELLED` without queuing inference work.
+- Cancellation while waiting for shared initialization rejects the scan promptly, but initialization continues for other callers.
+- A queued scan is removed or marked cancelled so it is never executed.
+- An active scan rejects promptly, skips remaining chunks/segments, and discards late results. The caller must not receive a partially completed result.
+- Once a promise has settled, later cancellation does not change its result.
+- Abort listeners and per-request state are released on success, failure, or cancellation.
+
+Cancellation does not guarantee immediate interruption of an ONNX operation already running. If the backend cannot interrupt it, that operation may finish, but its result is discarded and no further work for the cancelled request is scheduled. Do not terminate a shared worker or reset a shared session to cancel one request.
+
+#### Extension messaging
+
+`AbortSignal` stays in the public client wrapper; it must not be sent through extension messaging. The wrapper assigns a unique request ID and forwards cancellation using an internal message such as:
+
+```ts
+type CancelScanMessage = {
+  type: "PII_CANCEL_SCAN";
+  requestId: string;
+};
+```
+
+The transport must correlate scan requests, responses, and cancellation with that same ID, scoped to the originating client. Cancellation may affect only a request owned by that client. Unknown or completed request IDs are safe no-ops. The client must ignore late responses for cancelled requests.
+
+The wrapper registers cancellation before dispatching a scan and rechecks the signal to avoid missing an abort during setup. The transport must preserve scan-before-cancel ordering per request, or retain cancellation state until a racing scan has been rejected; a cancellation message must not be lost merely because the scan has not yet been queued.
+
+The current repository defines this API contract but does not yet contain a detector runtime or client implementation. These behaviors must be implemented and tested when those components are added.
+
+Minimum implementation tests:
+
+- Existing one-argument calls still complete normally.
+- With two concurrent scans, cancelling one does not cancel the other.
+- Already-aborted, queued, initialization-waiting, and active requests reject with `CANCELLED`.
+- Cancellation between chunks prevents subsequent chunks from running and never returns partial results.
+- Late responses, repeated cancellation, and cancellation after completion are harmless.
+- Aborting during request setup cannot leave an uncancelled scan queued.
+- Cancellation cannot target another client's request, and listeners/request state are cleaned up.
+
 ---
 
 ## 25. Recommended caller usage
@@ -762,12 +852,18 @@ interface PiiDetectorApi {
   initialize(): Promise<void>;
 
   scanText(
-    text: string
+    text: string,
+    options?: ScanOptions
   ): Promise<Detection[]>;
 
   scanSegments(
-    segments: TextSegment[]
+    segments: TextSegment[],
+    options?: ScanOptions
   ): Promise<SegmentDetectionResult[]>;
+}
+
+interface ScanOptions {
+  signal?: AbortSignal;
 }
 
 interface TextSegment {
@@ -809,6 +905,7 @@ character offset restoration
 overlap deduplication
 confidence
 WebGPU/WASM fallback
+request-scoped cancellation and late-result disposal
 ```
 
 ### Document module team
@@ -851,4 +948,3 @@ Detector:
 Caller:
 "What should we do with those spans?"
 ```
-
