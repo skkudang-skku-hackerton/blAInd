@@ -19,22 +19,13 @@ export function createFileList(files: readonly File[]): FileList {
 
 /**
  * 재주입에 사용할 file input 을 찾는다.
- * 처리 중 SPA 리렌더로 원래 input 이 DOM 에서 분리됐을 수 있어 fallback 을 둔다.
+ * 문서 전체 검색은 금지한다. 리렌더 fallback은 대화/입력 영역을 검증한 호출자가 정한다.
  */
 export function resolveFileInput(
   preferred: HTMLInputElement | null,
-  acceptHint?: string,
+  _acceptHint?: string,
 ): HTMLInputElement | null {
-  if (preferred && preferred.isConnected) return preferred;
-
-  const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[type=file]'));
-  if (inputs.length === 0) return null;
-
-  if (acceptHint) {
-    const byAccept = inputs.find((input) => input.accept === acceptHint);
-    if (byAccept) return byAccept;
-  }
-  return inputs.find((input) => !input.hidden && input.offsetParent !== null) ?? inputs[inputs.length - 1] ?? null;
+  return preferred?.isConnected ? preferred : null;
 }
 
 /** input[type=file] 에 파일을 주입하고 change 를 재발행한다. 성공 여부를 반환. */

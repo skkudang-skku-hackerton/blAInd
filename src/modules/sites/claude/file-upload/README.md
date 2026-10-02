@@ -124,6 +124,14 @@ const interceptor = createFileUploadInterceptor({
 2. 파일 묶음 중 하나라도 취소/보류면 전체를 첨부하지 않는다(부분 첨부 유출 방지).
 3. 처리 중 새 파일이 들어오면 `AbortController`로 이전 처리를 무효화한다.
 4. change 시 `input.value`를 즉시 비워 원본이 다른 경로로 새지 않게 한다.
+5. 처리 시작 URL·대화 식별 속성·입력 영역을 보관하고, 대화 이동 시 이전 배치를 취소한다.
+6. 재첨부 직전에 같은 대화·입력 영역인지 다시 확인한다. 원래 input이 사라지면 문서 전체에서
+   다른 input을 찾지 않는다. 대화 ID를 확인할 수 있고 기존 composer가 살아 있는 경우에만
+   그 내부의 유일한 호환 input으로 대체한다. composer 전체 교체·모호한 후보는 보류한다.
+
+대화 변경 감시는 공통 `modules/sites/upload-context.ts`가 담당한다. Navigation API,
+URL 변경, DOM 제거·대화 식별 속성 변경을 감시하며, stop/abort/완료 시 감시를 해제한다.
+새 대화처럼 URL에 대화 ID가 없으면 input 교체 fallback을 사용하지 않는다.
 
 ## 검증된 업로드 흐름 (리버싱)
 
@@ -157,6 +165,6 @@ Content-Type: multipart/form-data; boundary=----WebKitFormBoundary...
 
 ## 아직 남은 일
 
-- `DragEvent` + `dataTransfer` 생성이 막히는 환경의 드롭 fallback
+- 사이트별 실제 composer 구조에서 안전한 재첨부 범위 확인
 - 실제 Claude DOM에서 capture 차단·재주입 동작 E2E 검증
 - 문서 모듈과 `DocumentKind`·`DocumentProcessor` 시그니처 최종 합의
