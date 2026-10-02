@@ -23,7 +23,7 @@ export default defineConfig({
     name: 'blAInd',
     description: 'AI 웹페이지에서 전송 전 개인정보 마스킹을 돕는 확장 프로그램',
     ...(browser === 'chrome' ? { minimum_chrome_version: '116' } : {}),
-    permissions: browser === 'chrome' ? ['offscreen', 'unlimitedStorage'] : ['unlimitedStorage'],
+    permissions: browser === 'chrome' ? ['offscreen', 'unlimitedStorage', 'storage'] : ['unlimitedStorage', 'storage'],
     host_permissions: ['https://huggingface.co/*', 'https://*.hf.co/*'],
     web_accessible_resources: [{
       resources: ['document-review.html'],

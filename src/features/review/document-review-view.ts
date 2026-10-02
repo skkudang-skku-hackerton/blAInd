@@ -1,5 +1,6 @@
 import { analyzeDetections, mountPrivacyAlert, type ReviewResult } from '../../alert';
 import type { AlertReviewDecision, AlertReviewRequest } from '../../modules/documents/shared/types';
+import { normalizeMaskingPreferences } from '../../core/pii/preferences';
 
 function documentLocationLabel(segmentId: string): string {
   const match = /^docx:word\/(document|header(\d+)|footer(\d+)|footnotes|endnotes)\.xml:p(\d+)$/.exec(segmentId);
@@ -39,7 +40,7 @@ export function mountDocumentReview(
       confirm: { masking: restore(result.confirm.masking), nonMasking: restore(result.confirm.nonMasking) } });
   };
   return mountPrivacyAlert(container, {
-    analysis: analyzeDetections(text, detections, 'document'),
+    analysis: analyzeDetections(text, detections, 'document', normalizeMaskingPreferences(request.maskingPreferences)),
     itemContext: d => documentLocationLabel(
       origins.get(JSON.stringify([d.type, d.span.start, d.span.end]))?.segmentId ?? '',
     ),

@@ -1,5 +1,6 @@
 import { buildReviewResult } from './policy';
 import { ensureAlertFonts } from './typography';
+import { PII_LABELS as labels } from '../core/pii/preferences';
 import type { ApprovedReview, Detection, PrivacyAnalysis } from './types';
 
 export interface PrivacyAlertOptions {
@@ -9,13 +10,6 @@ export interface PrivacyAlertOptions {
   onCancel?: () => void;
   itemContext?: (detection: Detection) => string;
 }
-
-const labels: Record<string, string> = {
-  RRN: '주민등록번호', FRN: '외국인등록번호', CARD_NUMBER: '카드번호', ACCOUNT_NUMBER: '계좌번호',
-  SECRET: '비밀번호 · 키', PASSPORT: '여권번호', DRIVER_LICENSE: '운전면허번호', CVC: '카드 CVC',
-  IPIN: '아이핀', PHONE: '전화번호', EMAIL: '이메일', USER_ID: '사용자 ID', PERSON: '이름',
-  ADDRESS: '주소', ZIPCODE: '우편번호', DATE: '날짜 · 시간', GENERIC_ID: '기타 식별번호', CARD_EXPIRY: '카드 유효기간',
-};
 
 function detectedText(text: string, detection: Detection): string {
   return text.slice(detection.span.start, detection.span.end);
@@ -43,9 +37,7 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
   overlay.innerHTML = `<section class="blaind-alert" role="dialog" aria-modal="true" aria-label="가릴 항목 선택" tabindex="-1">
     <header class="blaind-alert-header"><div><p class="blaind-alert-eyebrow"><span class="blaind-alert-live-dot"></span> <span class="blaind-alert-logo">blAInd</span> <span class="blaind-alert-eyebrow-divider">/</span> PRIVACY CHECK</p></div></header>
     <div class="blaind-alert-workspace">
-      <section class="blaind-alert-preview" aria-labelledby="blaind-preview-title">
-        <div class="blaind-alert-panel-heading"><h3 id="blaind-preview-title">내용 미리보기</h3><span>텍스트 기준</span></div>
-        <p class="blaind-alert-preview-hint">표시된 항목을 눌러 가리거나, 오른쪽 목록에서 선택하세요.</p>
+      <section class="blaind-alert-preview" aria-label="보호할 내용">
         <div class="blaind-alert-preview-legend"><span class="blaind-legend-auto">자동 보호</span><span class="blaind-legend-confirm">선택 가능</span><span class="blaind-legend-selected">선택한 항목</span></div>
         <div class="blaind-alert-document" role="region" aria-label="보호할 내용 미리보기" tabindex="0"></div>
       </section>
@@ -212,16 +204,13 @@ const alertStyles = `
   display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0;
   color: #6F6F6B; font-size: 10px; font-weight: 500; line-height: 1.5; letter-spacing: .08em;
 }
-.blaind-alert-logo { color: #191919; font-weight: 700; letter-spacing: -.03em; }
+.blaind-alert-logo { color: #191919; font-family: "IBM Plex Mono", monospace; font-weight: 700; letter-spacing: -.03em; }
 .blaind-alert-eyebrow, .blaind-alert-selection-count, .blaind-alert-value, .blaind-alert-kind { font-family: "IBM Plex Mono", "IBM Plex Sans KR", monospace; font-weight: 500; }
 .blaind-alert-live-dot { width: 6px; height: 6px; border-radius: 50%; background: #191919; }
 .blaind-alert-eyebrow-divider { color: #E7E7E3; }
 .blaind-alert-workspace { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); gap: 24px; margin-top: 24px; }
 .blaind-alert-preview { min-width: 0; padding: 18px; border: 1px solid #E7E7E3; border-radius: 12px; background: #FCFCFB; }
-.blaind-alert-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.blaind-alert-panel-heading h3 { margin: 0; font-size: 14px; font-weight: 500; }
-.blaind-alert-panel-heading > span { font-size: 11px; color: #6F6F6B; }
-.blaind-alert-preview-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0 14px; font-size: 11px; color: #6F6F6B; }
+.blaind-alert-preview-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 14px; font-size: 11px; color: #6F6F6B; }
 .blaind-alert-preview-legend span:before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
 .blaind-legend-auto:before { background: #ECECE9; }
 .blaind-legend-confirm:before { background: #F4F3EE; border: 1px dashed #6F6F6B; }

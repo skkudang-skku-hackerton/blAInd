@@ -16,6 +16,8 @@ import { getTextSiteAdapter } from '../../modules/sites/text-adapters';
 import { createTextSubmitInterceptor } from '../../modules/text';
 import { requestBackgroundStatus } from '../../shared/messaging/client';
 import { getRegisteredSite, REGISTERED_SITE_MATCHES } from '../../sites/registry';
+import { initializeMaskingPreferences } from '../../shared/masking-preferences';
+import { ensureAlertFonts } from '../../alert/typography';
 
 export default defineContentScript({
   matches: REGISTERED_SITE_MATCHES,
@@ -29,12 +31,27 @@ export default defineContentScript({
   async main(ctx) {
     const site = getRegisteredSite(new URL(window.location.href));
     if (!site) return;
+    ensureAlertFonts(document);
 
     console.info(`[blAInd] Content Script ready: ${site.name}`);
 
     const notice = createHoldNotice();
     const adapter = getTextSiteAdapter(site.id);
-    const detector = createPiiDetectorClient();
+    const settings = initializeMaskingPreferences();
+    // A failed settings read holds the send/upload path just like a failed scan.
+    void settings.ready.catch(() => {});
+    const client = createPiiDetectorClient();
+    const detector = {
+      ...client,
+      async scanText(...args: Parameters<typeof client.scanText>) {
+        await settings.ready;
+        return client.scanText(...args);
+      },
+      async scanSegments(...args: Parameters<typeof client.scanSegments>) {
+        await settings.ready;
+        return client.scanSegments(...args);
+      },
+    };
     const documentReview = createDocumentReview();
     let documentStage = '';
     let documentFailed = false;
@@ -186,6 +203,7 @@ export default defineContentScript({
       scanner.dispose();
       unsubscribeStatus();
       detector.dispose();
+      settings.dispose();
       notice.dispose();
     });
 

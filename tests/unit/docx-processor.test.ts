@@ -121,7 +121,8 @@ describe('DOCX engine and real OOXML pipeline', () => {
   it('removes selected source XML text across runs while retaining identical kept text and formatting', async () => {
     const errors: unknown[] = [];
     const review = vi.fn(async (request: AlertReviewRequest) => {
-      expect(Object.keys(request)).toEqual(['segments']);
+      expect(Object.keys(request)).toEqual(['maskingPreferences', 'segments']);
+      expect(request.maskingPreferences?.PHONE).toBe('AUTO_MASK');
       const first = request.segments.find(({ text }) => text.startsWith('😀'))!;
       expect(first.detections).toContainEqual({ type: 'PERSON', confidence: 0.9, word: '김민수', span: { start: 3, end: 6 } });
       return approve(request);
