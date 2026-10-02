@@ -5,22 +5,31 @@
  * fetch/XHR 로 업로드하는 경우를 감시한다. 반드시 페이지 컨텍스트(MAIN world)에서
  * 실행해야 window.fetch 를 패치할 수 있다.
  *
- * ChatGPT는 보통 `POST /backend-api/files`(메타 JSON) + `PUT {upload_url}`(원본 바이트)
- * 2단계로 올린다. 두 단계는 파일과 직접 상관시키기 어려워, 이 모듈은
- * - FormData 업로드: 파일을 찾아 문서 모듈에 넘기고 재구성
- * - 그 외 바이너리 업로드: 감지·리포트, enforce 시 차단
- * 까지만 담당한다. 코어는 모른다. 기본값은 감지 리포트이며 차단은 opt-in 이다.
+ * ChatGPT 업로드 흐름 (리버싱 확인 · unauth mobile 번들 기준):
+ *   1) POST /backend-(api|anon)/files             (JSON 메타데이터)
+ *        → { file_id, upload_url, upload_headers? }
+ *   2) upload_url 로 파일 전송
+ *        - 경로가 /estuary/upload_content_bytes 면 POST FormData(file, upload_url)
+ *        - 아니면 PUT + upload_headers (예: *.oaiusercontent.com)
+ *   3) POST /backend-(api|anon)/files/process_upload_stream   (file_id 확정)
+ *
+ * 사이트 번들의 경로 검증기(a-Cn0LrOds.js)가 허용 경로를 정확히 열거한다:
+ *   /backend-api/files[/process_upload_stream]
+ *   /backend-anon/files[/process_upload_stream]
+ *   /(api|backend-api|backend-anon)/estuary/upload_content_bytes
+ *
+ * 이 모듈은 DOM 경로를 우회한 업로드를 감시한다. 검사 가능한 FormData 는 문서 모듈로
+ * 넘겨 재구성하고, 그 외 바이너리는 감지·리포트(enforce 시 차단)만 한다.
+ * 코어는 모른다. 기본값은 감지 리포트이며 차단은 opt-in 이다.
  */
 
 import { classifyFile } from './classify';
 import type { DocumentProcessorRegistry } from './types';
 
 const DEFAULT_UPLOAD_PATTERNS: readonly RegExp[] = [
-  /\/backend-api\/files/i,
+  /\/backend-(?:api|anon)\/files(?:\/process_upload_stream)?(?:[/?#]|$)/i,
+  /\/estuary\/upload_content_bytes(?:\?|$)/i,
   /oaiusercontent\.com/i,
-  /blob\.core\.windows\.net/i,
-  /storage\.googleapis\.com/i,
-  /\/upload/i,
 ];
 
 export interface NetworkGuardDetectInfo {

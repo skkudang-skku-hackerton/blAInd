@@ -1,5 +1,5 @@
 /**
- * 승인된 File[] 을 ChatGPT 입력에 다시 붙이는(대체 첨부) 유틸.
+ * 처리된 File[] 을 ChatGPT 입력에 다시 붙이는(대체 첨부) 유틸.
  *
  * input.files 는 읽기 전용처럼 보이지만 DataTransfer.files 를 대입하는 방식은
  * Chrome에서 정상 동작한다. React(17+)는 root 컨테이너에 change 리스너를 위임하므로
@@ -17,30 +17,57 @@ export function createFileList(files: readonly File[]): FileList {
   return transfer.files;
 }
 
-/** input[type=file] 에 파일을 주입하고 change 를 재발행한다. */
-export function injectFilesIntoInput(input: HTMLInputElement, files: readonly File[]): void {
-  input.files = createFileList(files);
+/**
+ * 재주입에 사용할 file input 을 찾는다.
+ * 처리 중 SPA 리렌더로 원래 input 이 DOM 에서 분리됐을 수 있어 fallback 을 둔다.
+ */
+export function resolveFileInput(
+  preferred: HTMLInputElement | null,
+  acceptHint?: string,
+): HTMLInputElement | null {
+  if (preferred && preferred.isConnected) return preferred;
+
+  const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[type=file]'));
+  if (inputs.length === 0) return null;
+
+  if (acceptHint) {
+    const byAccept = inputs.find((input) => input.accept === acceptHint);
+    if (byAccept) return byAccept;
+  }
+  return inputs.find((input) => !input.hidden && input.offsetParent !== null) ?? inputs[inputs.length - 1];
+}
+
+/** input[type=file] 에 파일을 주입하고 change 를 재발행한다. 성공 여부를 반환. */
+export function injectFilesIntoInput(
+  input: HTMLInputElement,
+  files: readonly File[],
+): boolean {
+  try {
+    input.files = createFileList(files);
+  } catch {
+    return false;
+  }
   const event = new Event('change', { bubbles: true, composed: true });
   markInternalEvent(event);
   input.dispatchEvent(event);
+  return true;
 }
 
 /**
  * drop 이벤트를 재구성해 원래 드롭 대상에 전달한다.
  * DragEvent 생성자에 dataTransfer 를 넘기는 것은 Chrome에서 지원된다.
- * 실패하는 환경에서는 fallbackInput 으로 우회한다.
+ * 실패하거나 대상이 분리됐으면 fallbackInput(input)으로 우회한다.
  */
 export function injectFilesIntoDrop(
   target: EventTarget | null,
   files: readonly File[],
-  fallbackInput?: HTMLInputElement,
+  fallbackInput?: HTMLInputElement | null,
 ): boolean {
-  const transfer = new DataTransfer();
-  for (const file of files) {
-    transfer.items.add(file);
-  }
-
-  if (target) {
+  if (target instanceof Element && target.isConnected) {
+    const transfer = new DataTransfer();
+    for (const file of files) {
+      transfer.items.add(file);
+    }
     try {
       const event = new DragEvent('drop', {
         bubbles: true,
@@ -56,9 +83,9 @@ export function injectFilesIntoDrop(
     }
   }
 
-  if (fallbackInput) {
-    injectFilesIntoInput(fallbackInput, files);
-    return true;
+  const input = resolveFileInput(fallbackInput ?? null);
+  if (input) {
+    return injectFilesIntoInput(input, files);
   }
   return false;
 }
