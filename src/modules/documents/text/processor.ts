@@ -1,4 +1,5 @@
 import { abortable } from '../shared/abortable';
+import { readFileBytes } from '../shared/read-file';
 import { createReviewRequest, resolveReview } from '../shared/review';
 import type { TextSegment } from '../../../core/api/types';
 import { DEFAULT_LIMITS, type TextDocumentProcessorOptions } from './types';
@@ -40,7 +41,7 @@ export function createTextDocumentProcessor(options: TextDocumentProcessorOption
       if (!Object.hasOwn(OUTPUT_TYPES, ext)) throw new Error('Unsupported text document extension');
 
       options.onStage?.('extracting', file);
-      const bytes = new Uint8Array(await abortable(file.arrayBuffer(), signal));
+      const bytes = new Uint8Array(await readFileBytes(file, signal));
       signal.throwIfAborted();
       let hasBom = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
       const source = new TextDecoder('utf-8', { fatal: true }).decode(hasBom ? bytes.subarray(3) : bytes);

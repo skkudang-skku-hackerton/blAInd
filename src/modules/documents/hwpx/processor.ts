@@ -1,4 +1,5 @@
 import { abortable } from '../shared/abortable';
+import { readFileBytes } from '../shared/read-file';
 import { createReviewRequest, resolveReview } from '../shared/review';
 import { openHwpxInWorker } from './worker-client';
 import { DEFAULT_LIMITS, type HwpxProcessorOptions, type HwpxSession } from './types';
@@ -12,7 +13,7 @@ export function createHwpxProcessor(options: HwpxProcessorOptions) {
       signal.throwIfAborted();
       if (!file.size || file.size > limits.maxInputBytes) throw new Error('HWPX input size limit exceeded');
       options.onStage?.('extracting', file);
-      const bytes = await abortable(file.arrayBuffer(), signal);
+      const bytes = await readFileBytes(file, signal);
       session = await (options.openHwpx ?? openHwpxInWorker)(bytes, limits, signal);
       signal.throwIfAborted();
       options.onStage?.('scanning', file);
