@@ -66,14 +66,14 @@ const STYLE = `
   box-sizing: border-box;
   max-width: min(92vw, 420px);
   padding: 12px 16px 12px 14px;
-  border-radius: 14px;
-  background: rgba(24, 24, 27, 0.94);
-  color: #fafafa;
+  border-radius: 8px;
+  background: #191919;
+  color: #FFFFFF;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   font-size: 13px;
   line-height: 1.35;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 8px 30px rgba(12, 12, 12, 0.28);
   pointer-events: auto;
   -webkit-font-smoothing: antialiased;
   opacity: 0;
@@ -85,13 +85,13 @@ const STYLE = `
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  border: 2px solid rgba(250, 250, 250, 0.28);
-  border-top-color: #fafafa;
+  border: 2px solid rgba(231, 231, 227, 0.28);
+  border-top-color: #191919;
   animation: blaind-spin 0.8s linear infinite;
 }
 .title { font-weight: 600; }
-.detail { color: rgba(250, 250, 250, 0.72); margin-top: 2px; word-break: break-word; }
-.files { color: rgba(250, 250, 250, 0.72); margin-top: 2px; }
+.detail { color: #ECECE9; margin-top: 2px; word-break: break-word; }
+.files { color: #ECECE9; margin-top: 2px; }
 @keyframes blaind-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation-duration: 2s; }

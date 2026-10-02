@@ -26,13 +26,14 @@ export function createHoldNotice(page: Document = document) {
         style.textContent = `
           :host { color-scheme: light; }
           section { box-sizing:border-box; width:320px; max-width:calc(100vw - 40px);
-            padding:16px; border:1px solid #d1d5db; border-radius:12px;
-            background:#fff; color:#111827; font:14px/1.6 system-ui,sans-serif;
-            box-shadow:0 6px 24px #0003; }
-          strong { font-size:14px; } p { margin:8px 0 12px; }
-          button { padding:5px 12px; border:1px solid #d1d5db; border-radius:6px;
-            background:#f9fafb; color:#111827; font:inherit; cursor:pointer; }
-          button:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
+            padding:16px; border:1px solid #E7E7E3; border-radius:8px;
+            background:#FFFFFF; color:#191919; font:14px/1.6 system-ui,sans-serif;
+            box-shadow:none; }
+          strong { font-size:14px; } p { color:#6F6F6B; margin:8px 0 12px; }
+          button { padding:5px 12px; border:1px solid #E7E7E3; border-radius:6px;
+            background:#FCFCFB; color:#191919; font:inherit; cursor:pointer; }
+          button:hover { background:#F1F3FF; }
+          button:focus-visible { outline:2px solid #191919; outline-offset:2px; }
         `;
         const panel = page.createElement('section');
         panel.setAttribute('role', 'status');
