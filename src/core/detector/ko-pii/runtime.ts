@@ -8,7 +8,7 @@ import { KoPiiTokenizer } from './tokenizer';
 
 export interface KoPiiRuntimeOptions {
   preferredBackend?: 'wasm' | 'webgpu';
-  /** Locally bundled ORT assets. Defaults to chrome.runtime.getURL('ort-wasm/'). */
+  /** Locally bundled ORT assets. Defaults to the current extension origin's ort-wasm directory. */
   wasmPaths?: string;
   fetch?: typeof globalThis.fetch;
   cacheStorage?: CacheStorage;
@@ -92,10 +92,23 @@ export class KoPiiRuntime implements InferenceRuntime {
     return this.initialization;
   }
   private async createSession(backend: 'wasm' | 'webgpu'): Promise<void> {
-    let ort = backend === 'webgpu' ? await import('onnxruntime-web/webgpu') : this.gpuOrt ?? await import('onnxruntime-web/wasm');
+    let ort: typeof Ort;
+    if (backend === 'webgpu') {
+      if (import.meta.env.FIREFOX) throw new Error('WebGPU backend is disabled in Firefox builds');
+      ort = await import('onnxruntime-web/webgpu');
+    } else ort = this.gpuOrt ?? await import('onnxruntime-web/wasm');
     if (backend === 'webgpu') this.gpuOrt = ort;
-    const extension = (globalThis as unknown as { chrome?: { runtime?: { getURL(path: string): string } } }).chrome;
-    const wasmPaths = this.options.wasmPaths ?? extension?.runtime?.getURL('ort-wasm/') ?? '/ort-wasm/';
+    const extensionApis = globalThis as unknown as {
+      browser?: { runtime?: { getURL(path: string): string } };
+      chrome?: { runtime?: { getURL(path: string): string } };
+    };
+    const extensionUrl = extensionApis.browser?.runtime?.getURL('ort-wasm/') ??
+      extensionApis.chrome?.runtime?.getURL('ort-wasm/');
+    const localOriginUrl = globalThis.location &&
+      ['moz-extension:', 'chrome-extension:'].includes(globalThis.location.protocol)
+      ? new URL('/ort-wasm/', globalThis.location.href).href
+      : undefined;
+    const wasmPaths = this.options.wasmPaths ?? extensionUrl ?? localOriginUrl ?? '/ort-wasm/';
     const assetUrl = new URL(wasmPaths, globalThis.location?.href ?? 'http://localhost/');
     const applicationUrl = globalThis.location ? new URL(globalThis.location.href) : undefined;
     if (!['http:', 'https:', 'chrome-extension:', 'moz-extension:'].includes(assetUrl.protocol) ||
