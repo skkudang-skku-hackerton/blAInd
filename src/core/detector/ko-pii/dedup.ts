@@ -33,6 +33,16 @@ export function deduplicateDetections(candidates: readonly ChunkDetection[]): De
       if (existing.span.start === candidate.span.start && existing.span.end === candidate.span.end) {
         existing.confidence = Math.max(existing.confidence, candidate.confidence);
       }
+      // Near-duplicate boundaries may differ. Keep the preferred evidence, but
+      // never discard characters covered only by the other view.
+      if (candidate.span.start < existing.span.start) {
+        existing.span.start = candidate.span.start;
+        existing.truncatedStart = candidate.truncatedStart;
+      }
+      if (candidate.span.end > existing.span.end) {
+        existing.span.end = candidate.span.end;
+        existing.truncatedEnd = candidate.truncatedEnd;
+      }
       group!.chunks.add(candidate.chunkIndex);
       continue;
     }
@@ -68,21 +78,30 @@ export function deduplicateDetections(candidates: readonly ChunkDetection[]): De
       kept.push({ detection: { ...candidate, span: { ...candidate.span } }, chunks: new Set([candidate.chunkIndex]) });
     }
   }
-  // Reconciliation alone can leave conflicting types or partial overlaps. Resolve
-  // those while truncation metadata is still available, regardless of chunk/type.
-  const resolved: ChunkDetection[] = [];
+  // Ranking chooses only the representative label, never which coverage survives.
   const conflictsRanked = kept.map((item) => item.detection).sort((a, b) =>
     Number(a.truncatedStart || a.truncatedEnd) - Number(b.truncatedStart || b.truncatedEnd) ||
     b.confidence - a.confidence ||
     (b.span.end - b.span.start) - (a.span.end - a.span.start) ||
     a.span.start - b.span.start || a.type.localeCompare(b.type) || a.chunkIndex - b.chunkIndex);
-  for (const candidate of conflictsRanked) {
-    if (!resolved.some((existing) =>
-      candidate.span.start < existing.span.end && existing.span.start < candidate.span.end)) {
-      resolved.push(candidate);
+  const ranks = new Map(conflictsRanked.map((candidate, index) => [candidate, index]));
+  const groups: { span: Detection['span']; members: ChunkDetection[] }[] = [];
+  for (const candidate of [...conflictsRanked].sort((a, b) =>
+    a.span.start - b.span.start || a.span.end - b.span.end || ranks.get(a)! - ranks.get(b)!)) {
+    const last = groups.at(-1);
+    if (last && candidate.span.start < last.span.end) {
+      last.span.end = Math.max(last.span.end, candidate.span.end);
+      last.members.push(candidate);
+    } else {
+      groups.push({ span: { ...candidate.span }, members: [candidate] });
     }
   }
-  return resolved
-    .sort((a, b) => a.span.start - b.span.start || a.span.end - b.span.end || a.type.localeCompare(b.type))
-    .map(({ type, confidence, span }) => ({ type, confidence, span }));
+  return groups.map(({ span, members }) => {
+    const representative = [...members].sort((a, b) => ranks.get(a)! - ranks.get(b)!)[0]!;
+    const region: Detection = { type: representative.type, confidence: representative.confidence, span };
+    if (members.length > 1) {
+      region.constituents = members.map(({ type, confidence, span }) => ({ type, confidence, span: { ...span } }));
+    }
+    return region;
+  });
 }

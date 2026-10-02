@@ -9,20 +9,22 @@ function valid(d: Detection, textLength: number): boolean {
     && d.span.start >= 0 && d.span.end > d.span.start && d.span.end <= textLength;
 }
 
-/** Applies original-text UTF-16 spans from right to left; exact duplicates and overlaps are ignored. */
+/** Masks the union of selected original-text UTF-16 spans; adjacent spans stay separate. */
 export function applyMasking(text: string, detections: readonly Detection[]): string {
   const candidates = detections
     .filter((d) => valid(d, text.length))
-    .map((d, order) => ({ detection: d, order }))
+    .map((d, order) => ({ detection: { ...d, span: { ...d.span } }, order }))
     .sort((a, b) => a.detection.span.start - b.detection.span.start
       || b.detection.span.end - a.detection.span.end || a.order - b.order);
   const accepted: typeof candidates = [];
-  let occupiedUntil = -1;
   for (const candidate of candidates) {
     const { start, end } = candidate.detection.span;
-    if (start < occupiedUntil) continue;
-    accepted.push(candidate);
-    occupiedUntil = end;
+    const previous = accepted.at(-1);
+    if (previous && start < previous.detection.span.end) {
+      // The first (start, longest, input order) member supplies the alias type;
+      // every selected member contributes its full coverage.
+      previous.detection.span.end = Math.max(previous.detection.span.end, end);
+    } else accepted.push(candidate);
   }
   const counts = new Map<PiiType, number>();
   const aliases = new Map<string, string>();
