@@ -104,7 +104,7 @@ On 2026-10-02, after rebasing onto `origin/main` and installing the tooling:
 | Check | Actual result |
 | --- | --- |
 | `npm run typecheck` (`wxt prepare && tsc --noEmit`) | Pass; no diagnostics |
-| `npm test` (Vitest unit suite) | Pass; 127 tests across 17 files |
+| `npm test` (Vitest + Node interceptor suites) | Pass; 127 Vitest tests across 17 files plus 35 Node tests |
 | `npm run build` | Pass; Chrome MV3 bundle plus local `ort-wasm/` assets |
 | `PII_MODEL_E2E=1 npm run test:e2e -- tests/e2e/pii-model.spec.ts` | Pass; real INT8 ONNX inference in Chromium WASM |
 | Real spans, segments, chunk boundary, cache-backed offline session | Pass; exact `PERSON`/`PHONE`/`EMAIL` spans, boundary phone, offline cache reuse |
@@ -119,3 +119,17 @@ offscreen document closed and networking disabled.
 
 WebGPU execution, mobile/browser portability, document parsing, masking, and
 production performance benchmarking are outside this suite's verified coverage.
+
+### Audit cleanup verification (2026-10-03)
+
+After updating the audit branch to the latest `main` and installing dependencies
+with `npm ci`:
+
+| Check | Actual result |
+| --- | --- |
+| `npm run typecheck` | Pass; no diagnostics with alert types imported from the shared detector API |
+| `npm test` (Vitest + Node interceptor suites) | Pass; 246 Vitest tests across 23 files plus 35 Node tests |
+| `npm run build` | Pass; Chrome MV3 bundle plus local `ort-wasm/` assets |
+
+The `test` script now runs both unit suites; `test:node` runs the interceptor suite
+independently. Browser-model results above remain the 2026-10-02 execution record.
