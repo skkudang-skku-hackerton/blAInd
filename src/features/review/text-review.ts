@@ -8,7 +8,7 @@ interface TextReviewOptions {
   onError(error: unknown): void;
 }
 
-/** 개발 단계 출력 경로. 실제 사이트 전송이나 입력창 교체는 호출하지 않습니다. */
+/** 승인한 최종 텍스트를 호출자에게 전달합니다. */
 export function createTextReviewController(options: TextReviewOptions) {
   let closeCurrent: (() => void) | null = null;
   function close(): void {

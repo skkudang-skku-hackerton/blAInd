@@ -43,7 +43,7 @@ export function createDomTextAdapter(
     return editors.filter((editor) => isAvailableEditor(editor) && isVisibleEditor(editor));
   }
 
-  return {
+  const adapter: TextSiteAdapter = {
     siteId,
     findEditor(event) {
       for (const target of event.composedPath()) {
@@ -77,9 +77,38 @@ export function createDomTextAdapter(
       }
       return null;
     },
+    findSendButtonForEditor(editor) {
+      if (!sendButtonSelector || !isAvailableEditor(editor)) return null;
+      const buttons = [...editor.ownerDocument.querySelectorAll<HTMLElement>(sendButtonSelector)]
+        .filter(button => isAvailableSendButton(button) && isVisibleEditor(button)
+          && adapter.findEditorForSendButton(button) === editor);
+      return buttons.length === 1 ? buttons[0]! : null;
+    },
+    replaceText(editor, text) {
+      if (!isAvailableEditor(editor)) throw new Error('Editor is unavailable');
+      const page = editor.ownerDocument;
+      editor.focus();
+      if (editor.matches('textarea')) {
+        const setter = Object.getOwnPropertyDescriptor(page.defaultView!.HTMLTextAreaElement.prototype, 'value')?.set;
+        if (!setter) throw new Error('Textarea setter is unavailable');
+        setter.call(editor, text);
+        editor.dispatchEvent(new page.defaultView!.Event('input', { bubbles: true, composed: true }));
+      } else {
+        const selection = page.getSelection();
+        if (!selection) throw new Error('Editor selection is unavailable');
+        const range = page.createRange();
+        range.selectNodeContents(editor);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        // ProseMirror/Quill 등의 편집 상태에도 브라우저 입력 트랜잭션을 전달합니다.
+        if (!page.execCommand('insertText', false, text)) throw new Error('Editor replacement failed');
+      }
+      if (adapter.readText(editor) !== text) throw new Error('Editor replacement did not match approved text');
+    },
     readText(editor) {
       if (editor.matches('textarea')) return (editor as HTMLTextAreaElement).value;
       return editor.innerText;
     },
   };
+  return adapter;
 }
