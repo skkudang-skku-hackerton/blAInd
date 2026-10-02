@@ -96,4 +96,22 @@ describe('MV3 background routing', () => {
     expect(requiredAt(sendMessage.mock.calls, 0)[0]).toMatchObject({ target: 'client' });
     remove();
   });
+  it('runs Firefox inference directly in the background when offscreen is unavailable', async () => {
+    const { runtime, listeners } = mockRuntime();
+    const tabs = { query: vi.fn().mockResolvedValue([]), sendMessage: vi.fn() };
+    const directRpc = { request: vi.fn(async req => ready(req)), dispose: vi.fn() };
+    const createDirectRpc = vi.fn(() => directRpc);
+    const remove = installPiiBackground(runtime, undefined, tabs, { browser: 'firefox', createDirectRpc });
+    const req: PiiRequest = { ...request(), target: 'background' };
+    const response = deferred<unknown>();
+    const listener = [...listeners].find(candidate => candidate(req,
+      { id: runtime.id, url: 'https://chatgpt.com/', tab: { id: 3 } }, response.resolve) === true);
+    expect(listener).toBeDefined();
+    await expect(response.promise).resolves.toMatchObject({ type: 'pii:ready', requestId: req.requestId });
+    expect(createDirectRpc).toHaveBeenCalledOnce();
+    expect(directRpc.request).toHaveBeenCalledWith(expect.objectContaining({ type: 'pii:init', ownerKey: expect.any(String) }), undefined);
+    remove();
+    await Promise.resolve();
+    expect(directRpc.dispose).toHaveBeenCalledOnce();
+  });
 });

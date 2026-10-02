@@ -143,7 +143,8 @@ blAInd/
 │   │   └── documents/
 │   │       ├── pdf/          # PDF 추출·마스킹·재생성
 │   │       ├── docx/         # Word OOXML 추출·마스킹·재생성
-│   │       ├── shared/       # PDF·DOCX 공통 Detector/Alert 계약·응답 검증
+│   │       ├── text/         # TXT·Markdown 텍스트 추출·마스킹·재생성
+│   │       ├── shared/       # 문서 모듈 공통 Detector/Alert 계약·응답 검증
 │   │       └── hwpx/         # 추후 HWPX 문서 처리
 │   ├── features/
 │   │   └── review/           # hold-notice.ts: 안내, text-scan.ts: 원문·탐지 결과와 요청 수명 관리
@@ -206,10 +207,11 @@ URL 등록은 확장이 실행될 페이지를 정합니다. 각 사이트의 �
 
 ## 문서 지원 계획
 
-PDF와 DOCX 모듈을 제공하며 이후 HWPX로 확장할 계획입니다. 파일 선택·드롭 단계에서 원본 업로드를 보류하고, 사용자 동의 후 **마스킹된 새 파일을 생성하여 사이트에 첨부**합니다. 메시지 전송만 막거나 이미 업로드된 파일을 삭제하는 것으로는 원본 유출을 방지할 수 없습니다. 실제 사이트에서 업로드 보류와 대체 첨부가 가능한지 먼저 검증합니다.
+PDF, DOCX, TXT/Markdown 모듈을 제공하며 이후 HWPX로 확장할 계획입니다. 파일 선택·드롭 단계에서 원본 업로드를 보류하고, 사용자 동의 후 **마스킹된 새 파일을 생성하여 사이트에 첨부**합니다. 메시지 전송만 막거나 이미 업로드된 파일을 삭제하는 것으로는 원본 유출을 방지할 수 없습니다. 실제 사이트에서 업로드 보류와 대체 첨부가 가능한지 먼저 검증합니다.
 
 - [PDF 모듈 연결·지원 범위](src/modules/documents/pdf/README.md)
 - [DOCX 모듈 연결·지원 범위](src/modules/documents/docx/README.md)
+- [TXT/Markdown 모듈 연결·지원 범위](src/modules/documents/text/README.md)
 
 두 모듈은 동일한 코어 검사 API와 Alert 검토 데이터 계약을 사용합니다. 실제 코어 클라이언트와 검토 함수를 주입해야 하며, 사이트 진입점에 자동으로 연결되는 것은 아닙니다. DOCX는 OOXML 문서만 대상으로 하며 구형 바이너리 `.doc` 파일은 지원하지 않습니다.
 
@@ -235,3 +237,17 @@ PDF와 DOCX 모듈을 제공하며 이후 HWPX로 확장할 계획입니다. 파
 5. 사이트 모듈과 DOCX·HWPX 문서 모듈을 추가합니다.
 
 `npm test`는 Node.js 기본 테스트 러너와 LinkeDOM으로 Enter·클릭 보류, 버튼과 입력창의 연결, 한글 조합·줄바꿈 분기, 반복 입력, SPA 입력 영역 교체, 리스너 수명과 오류 시 보류를 검증합니다. 테스트는 같은 프로세스에서 실행합니다. LinkeDOM이 구현하지 않는 capture 순서·기본 form 제출과 실제 사이트 전송 여부는 Chrome에서 확인합니다. 이후 동의 전 전송·원본 업로드 방지, 승인된 내용의 한 번만 전송, 입력·첨부 변경 시 재검사, 재생성 파일의 개인정보 잔존 여부 등을 추가로 검증합니다.
+
+## 브라우저 빌드
+
+```sh
+npm run build:chrome   # Chrome Manifest V3, offscreen inference host
+npm run build:firefox  # Firefox Manifest V2, background-page inference host
+npm run test:e2e:firefox
+```
+
+Firefox에는 Chrome Offscreen API가 없어 persistent MV2 background page에서 공유 추론
+Worker를 실행합니다. Detector 메시지·취소 프로토콜은 동일하며 Firefox에서는 WASM backend를
+사용합니다. Manifest는 Firefox의 데이터 수집 동의에 `none`을 선언합니다. 브라우저 E2E는
+파일 input 재주입과 문서 모듈 Worker/WASM을 확인하지만, 실제 확장 설치 후 모델 캐시·추론 및
+각 AI 사이트의 실서비스 DOM·업로드는 배포 전에 Firefox에서 별도 수동 검증이 필요합니다.

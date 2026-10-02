@@ -64,6 +64,28 @@ describe('KoPiiDetector', () => {
     expect(Object.keys(entity).sort()).toEqual(['confidence', 'span', 'type']);
   });
 
+  it('returns non-overlapping spans for text and segments when chunks disagree on entity types', async () => {
+    const { runtime } = fakeRuntime();
+    runtime.infer.mockImplementation(async (input) => {
+      const firstChunk = input.offsets[1]?.[0] === 0;
+      const start = firstChunk ? 400 : 420;
+      const end = firstChunk ? 450 : 460;
+      const label = firstChunk ? 1 : 3;
+      return logitsFor(input.offsets.map(([tokenStart, tokenEnd], i) =>
+        !input.specialTokensMask[i] && tokenStart >= start && tokenEnd <= end
+          ? label + Number(tokenStart !== start) : 0), [-2, firstChunk ? 3 : 4]);
+    });
+    const detector = new KoPiiDetector(runtime);
+    const text = 'a'.repeat(600);
+    const detections = await detector.scanText(text);
+    expect(detections).toEqual([
+      { type: 'PHONE', confidence: expect.any(Number), span: { start: 420, end: 460 } },
+    ]);
+    expect(await detector.scanSegments([{ id: 'first', text }, { id: 'second', text }])).toEqual([
+      { segmentId: 'first', detections }, { segmentId: 'second', detections },
+    ]);
+  });
+
   it('rejects malformed inputs before initialization or partial batch inference', async () => {
     const { runtime } = fakeRuntime();
     const detector = new KoPiiDetector(runtime);

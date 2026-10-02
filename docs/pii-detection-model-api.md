@@ -804,7 +804,7 @@ The transport must correlate scan requests, responses, and cancellation with tha
 
 The wrapper registers cancellation before dispatching a scan and rechecks the signal to avoid missing an abort during setup. The transport must preserve scan-before-cancel ordering per request, or retain cancellation state until a racing scan has been rejected; a cancellation message must not be lost merely because the scan has not yet been queued.
 
-The current repository defines this API contract but does not yet contain a detector runtime or client implementation. These behaviors must be implemented and tested when those components are added.
+The detector runtime and public client implementation exist in this repository (`src/core/detector/ko-pii/` and `src/shared/messaging/pii-client.ts`). These behaviors are implemented and covered by the unit tests and the opt-in browser tests in `tests/`.
 
 Minimum implementation tests:
 

@@ -10,6 +10,12 @@ export default defineConfig({
   reporter: 'list',
   outputDir: '/tmp/opencode/pii-playwright-results',
   use: { baseURL: 'http://127.0.0.1:4173', headless: true },
+  projects: [
+    { name: 'chromium', testIgnore: '**/firefox-compat.spec.ts', use: { browserName: 'chromium' } },
+    { name: 'firefox', testMatch: [
+      '**/firefox-compat.spec.ts', '**/pdf-module.spec.ts', '**/docx-module.spec.ts', '**/hwpx-module.spec.ts',
+    ], use: { browserName: 'firefox' } },
+  ],
   webServer: process.env.PII_MODEL_E2E === '1' ? {
     command: 'npx vite --config tests/e2e/vite.config.ts',
     url: 'http://127.0.0.1:4173/tests/e2e/harness.html',
