@@ -78,12 +78,14 @@ describe('model result → privacy review → preview output', () => {
     const f = setup(); f.invalidate(); vi.advanceTimersByTime(100);
     expect(f.root()).toBeUndefined(); expect(vi.getTimerCount()).toBe(0);
   });
-  it('requires approval even when no detections exist', () => {
+  it('forwards unchanged text immediately without a dialog when no detections exist', () => {
+    vi.useFakeTimers();
     const f = setup([]);
-    expect(f.root()!.querySelector('[role=dialog]')!.textContent).toContain('개인정보가 탐지되지 않았습니다');
-    expect(f.onApproved).not.toHaveBeenCalled();
-    f.click('.blaind-alert-keep');
     expect(f.onApproved).toHaveBeenCalledExactlyOnceWith(f.editor.value);
+    expect(f.root()).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(f.onCancelled).not.toHaveBeenCalled();
+    expect(f.onError).not.toHaveBeenCalled();
   });
   it('cannot complete twice from a retained button', () => {
     const f = setup(); const button = f.root()!.querySelector<HTMLButtonElement>('button.blaind-alert-keep')!;

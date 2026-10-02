@@ -10,7 +10,7 @@ const interceptor = createTextSubmitInterceptor({
   adapter: getTextSiteAdapter('chatgpt'),
   onIntercept({ text, editor, siteId, source }) {
     // source는 'enter' 또는 'button'입니다. 이후 처리는 공통으로 연결합니다.
-    // text 검사 → 탐지 항목 선택 → 유효성 확인 → editor 교체·전송.
+    // text 검사 → 탐지가 없으면 원문 전송, 있으면 항목 선택 후 교체·전송.
     // 검사하는 동안 입력창이 바뀔 수 있으므로 전달된 원문을 기준으로 검사합니다.
   },
   onError(error) {
@@ -56,9 +56,9 @@ Claude의 선택자는 `.ProseMirror[contenteditable="true"]`, Gemini는 `rich-t
 
 Content 진입점은 `features/review/text-scan.ts`의 검사 컨트롤러에 전송 시점의 원문을 전달합니다. 컨트롤러는 공개 모델 클라이언트의 `scanText(text, { signal })`을 호출하고 원문과 탐지 구간을 함께 `onResult`로 전달합니다. 완료된 결과는 `scanner.getResult()`로도 얻을 수 있습니다. 원문·URL·입력창·대화 ID가 변경된 결과는 폐기하며, 새 검사나 확장 무효화 시 이전 요청을 취소합니다.
 
-원문은 확장 내부 모델 요청에 사용하며 외부 추론 서버로 전송하지 않습니다. 콘솔에는 사이트명·글자 수·탐지 개수·유형만 기록하고 원문과 탐지된 값은 기록하지 않습니다. 안내에는 모델 준비·검사·완료·오류 상태가 표시됩니다. 탐지가 없어도 전송은 보류하며, 안내의 닫기 버튼은 안내만 닫습니다.
+원문은 확장 내부 모델 요청에 사용하며 외부 추론 서버로 전송하지 않습니다. 콘솔에는 사이트명·글자 수·탐지 개수·유형만 기록하고 원문과 탐지된 값은 기록하지 않습니다. 텍스트 모델 준비와 검사는 팝업 없이 진행합니다. 텍스트 검사에 성공하고 탐지가 0개이면 확인창이나 전송 안내 팝업 없이 원문을 바로 전송합니다. 탐지 항목이 있으면 확인창에서 승인 후 전송하며, 오류·취소 시에는 안내를 표시합니다. 안내의 닫기 버튼은 안내만 닫습니다.
 
-Ctrl/Alt/Meta+Enter에 의한 전송, 선택 UI, 입력 교체·재전송은 후속 단계입니다. 사이트가 click 이전의 포인터 이벤트나 별도 경로로 전송하는 경우도 실제 페이지에서 확인해야 합니다.
+자동 전송과 승인 후 전송 모두 입력창·원문·대화를 다시 확인하고 전송 버튼을 한 번 호출합니다. 검사 오류나 검사 중 입력·대화 변경 시에는 전송하지 않습니다. Ctrl/Alt/Meta+Enter에 의한 전송은 후속 단계입니다. 사이트가 click 이전의 포인터 이벤트나 별도 경로로 전송하는 경우도 실제 페이지에서 확인해야 합니다.
 
 ## 확인
 
@@ -72,10 +72,11 @@ LinkeDOM은 브라우저의 capture 순서와 기본 form 제출을 구현하지
 
 1. `npm run build` 후 확장과 AI 페이지를 새로고침합니다.
 2. 채팅 입력창에 테스트 문장을 쓰고 Enter를 누릅니다.
-3. 질문이 전송되지 않고 원문이 남으며, 보류 안내와 `[blAInd] Enter intercepted: <사이트명>` 로그가 나타나는지 확인합니다. 최초 검사에서는 약 483 MB의 INT8 모델을 다운로드하므로 준비 시간이 필요합니다.
+3. 검사 중 질문이 전송되지 않고 원문이 남으며, 팝업 없이 `[blAInd] Enter intercepted: <사이트명>` 로그가 나타나는지 확인합니다. 최초 검사에서는 약 483 MB의 INT8 모델을 다운로드하므로 준비 시간이 필요합니다.
 4. `[blAInd] PII scan started` 이후 `PII scan completed`와 탐지 개수·유형을 확인합니다. 예: `김민수의 연락처는 010-1234-5678입니다.` Alert에서 Confirm 항목을 선택하고 진행하면 마스킹한 텍스트로 입력창을 교체하고 전송 버튼을 한 번 호출합니다. Auto Mask는 항상 적용됩니다. 취소하면 전송하지 않습니다. 콘솔의 `[blAInd] Approved text send requested`는 전송 버튼 호출을 의미하며 서버 수신 완료를 보장하지 않습니다.
 5. 전송 버튼을 직접 눌러 같은 검사 흐름과 `[blAInd] Send button intercepted: <사이트명>` 로그가 나타나는지 확인합니다. 아이콘을 눌러도 동일해야 합니다.
 6. Shift+Enter로 줄바꿈이 되고 한글 조합 확정이 유지되는지 확인합니다. 첨부·음성·생성 중지 버튼도 정상 동작해야 합니다.
 7. 검사 중 입력을 수정하거나 다른 대화로 이동하면 결과가 폐기되는지, 새 대화에서 다시 검사할 수 있는지 확인합니다.
+8. 탐지 결과가 0개인 문장은 검사부터 전송까지 팝업 없이 원문 그대로 한 번 전송되고 `[blAInd] No-detection text send requested`가 기록되는지 확인합니다. Enter와 전송 버튼 모두 확인합니다.
 
 키보드 조합 여부는 [KeyboardEvent.isComposing](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/isComposing), 전파 차단은 [Event.stopImmediatePropagation](https://developer.mozilla.org/en-US/docs/Web/API/Event/stopImmediatePropagation)을 사용합니다.
