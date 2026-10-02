@@ -4,7 +4,10 @@ import { PII_TYPES } from '../../core/pii/types';
 import { DEFAULT_MASKING_PREFERENCES, PII_LABELS, type MaskingPreferences, type MaskingPolicy } from '../../core/pii/preferences';
 import { loadMaskingPreferences, saveMaskingPreferences } from '../../shared/masking-preferences';
 import { ensureAlertFonts } from '../../alert/typography';
+import logoUrl from '../../alert/assets/blaind-B-light.svg';
 import './settings.css';
+
+const settingsLabels = { ...PII_LABELS, CVC: '카드 보안코드', USER_ID: '사용자 아이디' };
 
 export function Settings() {
   const [saved, setSaved] = useState<MaskingPreferences | null>(null);
@@ -41,10 +44,10 @@ export function Settings() {
   }
 
   return <main className="settings">
-    <header className="settings-header"><span className="brand-dot" /><span className="brand">blAInd</span><span className="divider">/</span><span>PRIVACY SETTINGS</span></header>
+    <header className="settings-header"><img className="settings-logo" src={logoUrl} alt="블라인드" /><span>개인 설정</span></header>
     <fieldset className="label-list" disabled={busy || saved === null} aria-label="개인정보별 기본 보호 방식">
       {PII_TYPES.map(type => <div className="label-row" key={type}>
-        <div className="label-name" id={`label-${type}`}><strong>{PII_LABELS[type]}</strong><span>{type}</span></div>
+        <div className="label-name" id={`label-${type}`}>{settingsLabels[type]}</div>
         <div className="policy-switch" role="radiogroup" aria-labelledby={`label-${type}`}>
           {(['AUTO_MASK', 'CONFIRM'] as const).map(policy => <label key={policy}>
             <input type="radio" name={type} value={policy} checked={draft[type] === policy} onChange={() => change(type, policy)} />
