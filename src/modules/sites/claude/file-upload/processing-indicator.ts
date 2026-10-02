@@ -9,6 +9,10 @@
  * 여기서는 순수하게 "처리 중" 상태만 보여준다.
  */
 
+import { createPopupLogo, popupThemeStyles } from '../../../../alert/popup-theme';
+import { ensureAlertFonts } from '../../../../alert/typography';
+import { processingIndicatorStyles } from '../../processing-indicator-styles';
+
 export interface ProcessingIndicatorLabels {
   /** 제목. 기본 "파일 검사 중" */
   title: string;
@@ -51,50 +55,9 @@ export interface ProcessingIndicatorOptions {
 
 const HOST_ID = 'blaind-claude-processing-indicator';
 
-const STYLE = `
-:host { all: initial; }
-.wrap {
-  position: fixed;
-  left: 50%;
-  bottom: var(--blaind-bottom, 96px);
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  box-sizing: border-box;
-  max-width: min(92vw, 420px);
-  padding: 12px 16px 12px 14px;
-  border-radius: 8px;
-  background: #191919;
-  color: #FFFFFF;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-  font-size: 13px;
-  line-height: 1.35;
-  box-shadow: 0 8px 30px rgba(12, 12, 12, 0.28);
-  pointer-events: none;
-  -webkit-font-smoothing: antialiased;
-  opacity: 0;
-  transition: opacity 140ms ease, transform 140ms ease;
-}
-.wrap[data-visible="true"] { opacity: 1; }
-.spinner {
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid rgba(231, 231, 227, 0.28);
-  border-top-color: #191919;
-  animation: blaind-spin 0.8s linear infinite;
-}
-.title { font-weight: 600; }
-.detail { color: #ECECE9; margin-top: 2px; word-break: break-word; }
-.files { color: #ECECE9; margin-top: 2px; }
-@keyframes blaind-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .spinner { animation-duration: 2s; }
-  .wrap { transition: none; }
-}
+const STYLE = `${popupThemeStyles}
+${processingIndicatorStyles}
+.wrap { pointer-events: none; }
 `;
 
 export function createProcessingIndicator(
@@ -117,6 +80,7 @@ export function createProcessingIndicator(
   let visible = false;
 
   function buildAndMount(): void {
+    ensureAlertFonts(document);
     // 이전 인스턴스/중복 호스트 제거
     document.getElementById(HOST_ID)?.remove();
 
@@ -132,25 +96,33 @@ export function createProcessingIndicator(
     style.textContent = STYLE;
 
     wrap = document.createElement('div');
-    wrap.className = 'wrap';
+    wrap.className = 'blaind-popup wrap';
     wrap.setAttribute('data-visible', 'false');
     wrap.setAttribute('role', 'status');
     wrap.setAttribute('aria-live', 'polite');
 
+    const header = document.createElement('div');
+    header.className = 'blaind-popup-header';
+    titleEl = document.createElement('div');
+    titleEl.className = 'title';
+    header.append(createPopupLogo(document), titleEl);
+
+    const message = document.createElement('div');
+    message.className = 'blaind-popup-message processing-message';
     const spinner = document.createElement('span');
     spinner.className = 'spinner';
     spinner.setAttribute('aria-hidden', 'true');
 
     const text = document.createElement('div');
-    titleEl = document.createElement('div');
-    titleEl.className = 'title';
+    text.className = 'processing-copy';
     filesEl = document.createElement('div');
     filesEl.className = 'files';
     detailEl = document.createElement('div');
     detailEl.className = 'detail';
-    text.append(titleEl, filesEl, detailEl);
+    text.append(filesEl, detailEl);
 
-    wrap.append(spinner, text);
+    message.append(spinner, text);
+    wrap.append(header, message);
     shadow.append(style, wrap);
     getHostParent().append(host);
   }

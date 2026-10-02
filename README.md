@@ -99,7 +99,7 @@ Shift+Enter와 한글 조합 중 Enter, 첨부·음성·생성 중지·비활성
 
 `features/review/text-scan.ts`는 원문과 탐지 구간을 함께 보관하고 `features/review/text-review.ts`가 Alert UI와 마스킹 처리를 연결합니다. 검사 중 같은 원문으로 Enter·버튼을 연속 사용하면 검사를 중복하지 않습니다. 다른 입력의 검사는 이전 요청을 취소하며, 입력 수정·입력창 교체·대화 이동·확장 무효화 뒤의 응답은 폐기합니다.
 
-Alert에서 선택한 Confirm 항목과 모든 Auto Mask 항목을 마스킹합니다. 같은 타입·같은 값은 같은 라벨을 사용합니다. 텍스트 검사에 성공하고 탐지가 0개이면 확인창이나 전송 안내 팝업 없이 원문을 바로 전송하며, `[blAInd] No-detection text send requested`를 기록합니다. 탐지 항목이 있으면 Alert에서 승인 후 전송합니다. 취소·오류·입력 또는 대화 변경 시에는 전송하지 않습니다. 전송 직전에 입력창과 전송할 텍스트를 다시 확인하고, 해당 입력창의 활성 전송 버튼만 한 번 호출합니다. 버튼을 찾지 못하면 입력을 유지하고 전송을 중단합니다. Ctrl/Alt/Meta+Enter 처리는 아직 연결하지 않았습니다. 모듈 API와 확인 방법은 [`src/modules/text/README.md`](src/modules/text/README.md)를 참고해주세요.
+Alert에서 최종 체크된 Confirm과 Auto Mask 항목만 마스킹합니다. Auto Mask 항목은 처음에 체크되어 있으며 해제할 수 있습니다. 같은 타입·같은 값은 같은 라벨을 사용합니다. 텍스트 검사에 성공하고 탐지가 0개이면 확인창이나 전송 안내 팝업 없이 원문을 바로 전송하며, `[blAInd] No-detection text send requested`를 기록합니다. 탐지 항목이 있으면 Alert에서 승인 후 전송합니다. 취소·오류·입력 또는 대화 변경 시에는 전송하지 않습니다. 전송 직전에 입력창과 전송할 텍스트를 다시 확인하고, 해당 입력창의 활성 전송 버튼만 한 번 호출합니다. 버튼을 찾지 못하면 입력을 유지하고 전송을 중단합니다. Ctrl/Alt/Meta+Enter 처리는 아직 연결하지 않았습니다. 모듈 API와 확인 방법은 [`src/modules/text/README.md`](src/modules/text/README.md)를 참고해주세요.
 
 ## 목표 사용자 흐름
 

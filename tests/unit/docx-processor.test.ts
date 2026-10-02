@@ -413,7 +413,7 @@ describe('DOCX review validation and cancellation', () => {
         const decision = approve(request);
         if (kind === 'omitted') decision.autoMask = [];
         if (kind === 'duplicate') decision.autoMask.push(structuredClone(decision.autoMask[0]!));
-        if (kind === 'wrong-policy') decision.confirm.nonMasking.push(decision.autoMask.pop()!);
+        if (kind === 'wrong-policy') decision.confirm.masking.push(decision.autoMask.pop()!);
         if (kind === 'forged-word') decision.autoMask[0]!.word = 'other';
         if (kind === 'forged-span') decision.autoMask[0]!.span.start++;
         if (kind === 'mutated-request') {

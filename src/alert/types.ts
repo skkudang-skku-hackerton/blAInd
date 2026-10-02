@@ -21,7 +21,9 @@ export interface ReviewItem {
 
 export interface ApprovedReview {
   status: 'approved';
+  /** AUTO_MASK items that remain selected after review. */
   autoMask: ReviewItem[];
+  /** nonMasking includes unchecked items from either configured policy. */
   confirm: { masking: ReviewItem[]; nonMasking: ReviewItem[] };
 }
 

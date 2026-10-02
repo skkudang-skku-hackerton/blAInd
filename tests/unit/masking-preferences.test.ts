@@ -52,4 +52,22 @@ describe('user masking preferences', () => {
     draft.PERSON = 'AUTO_MASK';
     expect(getMaskingPreferences().PERSON).toBe('CONFIRM');
   });
+
+  it('allows unchecking a user-configured automatic item without changing saved preferences', () => {
+    setMaskingPreferences({ PERSON: 'AUTO_MASK', PHONE: 'CONFIRM' });
+    const text = '김민수 010-1234-5678';
+    const detections = [
+      { type: 'PERSON' as const, confidence: 1, span: { start: 0, end: 3 } },
+      { type: 'PHONE' as const, confidence: 1, span: { start: 4, end: 17 } },
+    ];
+    const request = createReviewRequest([{ id: 's', text }], [{ segmentId: 's', detections }]);
+    const analysis = analyzeDetections(text, detections, 's', request.maskingPreferences);
+    const decision = buildReviewResult(analysis, analysis.confirmDetections, []);
+    expect(decision.autoMask).toEqual([]);
+    expect(decision.confirm.nonMasking.map(item => item.type)).toEqual(['PERSON']);
+    expect(getMaskingPreferences().PERSON).toBe('AUTO_MASK');
+    setMaskingPreferences(null);
+    expect(resolveReview(request, decision)).toEqual([{ segmentId: 's', spans: [{ start: 4, end: 17 }] }]);
+    expect(request.maskingPreferences?.PERSON).toBe('AUTO_MASK');
+  });
 });
