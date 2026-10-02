@@ -1,6 +1,7 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { createPiiDetectorClient, PiiError } from '../../core/api';
 import { createHoldNotice } from '../../features/review/hold-notice';
+import { createTextReviewController } from '../../features/review/text-review';
 import { createTextScanController } from '../../features/review/text-scan';
 import { getTextSiteAdapter } from '../../modules/sites/text-adapters';
 import { createTextSubmitInterceptor } from '../../modules/text';
@@ -32,25 +33,37 @@ export default defineContentScript({
       });
       notice.show('개인정보 검사에 실패해 전송을 보류했습니다. 입력은 유지됩니다. 다시 시도해 주세요.');
     };
+    const review = createTextReviewController({
+      getCurrentResult: () => scanner.getResult(),
+      onApproved(text) {
+        console.info('[blAInd] Masked text (preview only)', text);
+        notice.show('마스킹 결과를 콘솔에 출력했습니다. 실제 전송은 하지 않았습니다.');
+      },
+      onCancelled() {
+        notice.show('확인을 취소했습니다. 입력은 유지되며 전송하지 않습니다.');
+      },
+      onError: onScanError,
+    });
     const scanner = createTextScanController({
       detector,
       readText: editor => adapter.readText(editor),
       getPageUrl: () => window.location.href,
       onScanning({ text }) {
+        review.close();
         downloadProgress = -1;
         console.info(`[blAInd] PII scan started: ${site.name}`, { length: text.length });
         notice.show('입력한 내용에서 개인정보를 검사하고 있습니다. 전송은 보류됩니다.');
       },
-      onResult({ detections }) {
-        // 값과 원문은 로그에 남기지 않고, 확인 UI 연결에 필요한 결과는 scanner가 유지합니다.
+      onResult(result) {
+        const { detections } = result;
         const types = [...new Set(detections.map(detection => detection.type))];
         console.info(`[blAInd] PII scan completed: ${site.name}`, { count: detections.length, types });
-        notice.show(detections.length > 0
-          ? `개인정보 후보 ${detections.length}개를 찾았습니다. 전송은 보류되며 입력 내용은 유지됩니다.`
-          : '개인정보 검사가 완료됐습니다. 탐지된 항목은 없으며, 전송은 보류됩니다.');
+        notice.dispose();
+        review.open(result);
       },
       onError: onScanError,
       onDiscarded() {
+        review.close();
         notice.show('입력 또는 대화가 변경되어 검사 결과를 폐기했습니다. 전송하려면 다시 검사해 주세요.');
       },
     });
@@ -100,6 +113,7 @@ export default defineContentScript({
       window.removeEventListener('hashchange', cancel);
       window.removeEventListener('pagehide', cancel);
       navigation?.removeEventListener('navigate', cancel);
+      review.dispose();
       scanner.dispose();
       unsubscribeStatus();
       detector.dispose();
@@ -117,6 +131,6 @@ export default defineContentScript({
       console.error('[blAInd] Background connection failed', error);
     }
 
-    // 다음 단계: scanner의 TextScanResult → Alert 항목 선택 → 교체·전송.
+    // 개발 단계: Alert 승인 결과를 콘솔에만 출력합니다.
   },
 });
