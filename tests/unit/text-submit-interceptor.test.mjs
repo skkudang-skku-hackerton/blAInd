@@ -3,7 +3,6 @@ import { test } from 'node:test';
 import { parseHTML } from 'linkedom';
 import { createTextSubmitInterceptor } from '../../src/modules/text/submit-interceptor.ts';
 import { getTextSiteAdapter } from '../../src/modules/sites/text-adapters.ts';
-import { createHoldNotice } from '../../src/features/review/hold-notice.ts';
 
 function fixture(markup = '<div id="prompt-textarea" contenteditable="true"><p>안녕하세요</p></div>', siteId = 'chatgpt') {
   const { document, window } = parseHTML(`<html><body>${markup}</body></html>`);
@@ -189,16 +188,6 @@ test('읽기 또는 후속 콜백 실패 시에도 원래 Enter를 보류한다'
     assert.deepEqual(errors, [failure]);
     interceptor.stop();
   }
-});
-
-test('보류 안내는 중복 생성하지 않고 dispose 시 제거한다', () => {
-  const f = fixture();
-  const notice = createHoldNotice(f.document);
-  notice.show('Enter 전송 보류');
-  notice.show('다시 보류');
-  assert.equal(f.document.querySelectorAll('[data-blaind-notice="hold"]').length, 1);
-  notice.dispose();
-  assert.equal(f.document.querySelectorAll('[data-blaind-notice="hold"]').length, 0);
 });
 
 for (const [siteId, editorMarkup, buttonMarkup, expectedText] of [

@@ -1,6 +1,6 @@
 import { buildReviewResult } from './policy';
 import { ensureAlertFonts } from './typography';
-import logoSvg from './assets/blaind-B-light.svg?raw';
+import { createPopupLogo, popupThemeStyles } from './popup-theme';
 import { PII_LABELS as labels } from '../core/pii/preferences';
 import type { ApprovedReview, Detection, PrivacyAnalysis } from './types';
 
@@ -26,7 +26,7 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     .sort((a, b) => a.span.start - b.span.start || a.span.end - b.span.end);
   const previousFocus = document.activeElement as HTMLElement | null;
   const style = document.createElement('style');
-  style.textContent = alertStyles;
+  style.textContent = `${popupThemeStyles}\n${alertStyles}`;
   const overlay = document.createElement('div');
   overlay.className = 'blaind-alert-backdrop';
   // Shadow DOM isolates styles, but composed UI events still reach the site's
@@ -39,7 +39,7 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     'keydown', 'keypress', 'keyup', 'input', 'change', 'focusin', 'focusout',
   ]) overlay.addEventListener(type, event => event.stopPropagation());
   overlay.innerHTML = `<section class="blaind-alert" role="dialog" aria-modal="true" aria-label="가릴 항목 선택" tabindex="-1">
-    <header class="blaind-alert-header"><p class="blaind-alert-eyebrow"><span class="blaind-alert-logo" role="img" aria-label="블라인드">${logoSvg}</span><span>개인정보 확인</span></p></header>
+    <header class="blaind-alert-header"><p class="blaind-alert-eyebrow blaind-popup-header"><span>개인정보 확인</span></p></header>
     <div class="blaind-alert-workspace">
       <section class="blaind-alert-preview" aria-label="보호할 내용">
         <div class="blaind-alert-preview-legend"><span class="blaind-legend-confirm">선택 가능</span><span class="blaind-legend-selected">선택한 항목</span></div>
@@ -52,6 +52,9 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     </div>
     <footer class="blaind-alert-actions"><button type="button" class="blaind-alert-cancel">취소</button><div><button type="button" class="blaind-alert-keep">원문으로 진행</button><button type="button" class="blaind-alert-mask">선택 항목 가리고 진행</button></div></footer>
   </section>`;
+  const logo = createPopupLogo(document);
+  logo.classList.add('blaind-alert-logo');
+  overlay.querySelector('.blaind-alert-eyebrow')!.prepend(logo);
   host.append(style, overlay);
   const dialog = overlay.querySelector<HTMLElement>('[role="dialog"]')!;
   const items = overlay.querySelector<HTMLElement>('.blaind-alert-items')!;
@@ -189,70 +192,64 @@ const alertStyles = `
   position: fixed; inset: 0; z-index: 2147483647;
   display: grid; place-items: center; box-sizing: border-box; padding: 20px;
   background: rgba(12, 12, 12, .32);
-  font-family: "blAInd Numerals", "IBM Plex Sans KR", sans-serif;
+  font-family: var(--blaind-font);
   font-weight: 400;
-  color: #191919; color-scheme: light;
+  color: var(--blaind-ink); color-scheme: light;
 }
 .blaind-alert, .blaind-alert * { box-sizing: border-box; }
 .blaind-alert {
   width: min(100%, 1000px); max-height: min(900px, calc(100dvh - 40px)); overflow: auto;
-  background: #FFFFFF; border: 1px solid #E7E7E3; border-radius: 16px; padding: 28px; outline: none;
-  box-shadow: 0 18px 60px rgba(12, 12, 12, .14);
+  background: var(--blaind-surface); border: 1px solid var(--blaind-border); border-radius: var(--blaind-radius-panel); padding: 28px; outline: none;
+  box-shadow: var(--blaind-shadow);
 }
 .blaind-alert-header { display: flex; align-items: center; gap: 14px; }
-.blaind-alert-eyebrow {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0;
-  color: #6F6F6B; font-size: 12px; font-weight: 500; line-height: 1.5;
-}
-.blaind-alert-logo { display: block; width: 94px; flex: none; }
-.blaind-alert-logo svg { display: block; width: 100%; height: auto; }
 .blaind-alert-selection-count, .blaind-alert-value, .blaind-alert-kind { font-family: "IBM Plex Mono", "IBM Plex Sans KR", monospace; font-weight: 500; }
 .blaind-alert-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 260px); gap: 20px; margin-top: 20px; }
-.blaind-alert-preview { min-width: 0; padding: 18px; border: 1px solid #E7E7E3; border-radius: 12px; background: #FCFCFB; }
-.blaind-alert-preview-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 14px; font-size: 11px; color: #6F6F6B; }
+.blaind-alert-preview { min-width: 0; padding: 18px; border: 1px solid var(--blaind-border); border-radius: var(--blaind-radius-inset); background: var(--blaind-inset); }
+.blaind-alert-preview-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 14px; font-size: 11px; color: var(--blaind-muted); }
 .blaind-alert-preview-legend span:before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
-.blaind-legend-confirm:before { background: #F4F3EE; border: 1px dashed #6F6F6B; }
-.blaind-legend-selected:before { background: #191919; border: 1px solid #191919; }
-.blaind-alert-document { max-height: 42vh; min-height: 220px; overflow: auto; padding: 22px; border: 1px solid #E7E7E3; border-radius: 8px; background: #FFFFFF; color: #191919; font-size: 14px; line-height: 2; white-space: pre-wrap; overflow-wrap: anywhere; }
-.blaind-alert-document:focus-visible { outline: 2px solid #191919; outline-offset: 2px; }
+.blaind-legend-confirm:before { background: var(--blaind-soft); border: 1px dashed var(--blaind-muted); }
+.blaind-legend-selected:before { background: var(--blaind-ink); border: 1px solid var(--blaind-ink); }
+.blaind-alert-document { max-height: 42vh; min-height: 220px; overflow: auto; padding: 22px; border: 1px solid var(--blaind-border); border-radius: var(--blaind-radius-button); background: var(--blaind-surface); color: var(--blaind-ink); font-size: 14px; line-height: 2; white-space: pre-wrap; overflow-wrap: anywhere; }
+.blaind-alert-document:focus-visible { outline: 2px solid var(--blaind-ink); outline-offset: 2px; }
 .blaind-alert-list { min-width: 0; margin: 0; padding: 0; border: 0; }
 .blaind-alert-workspace:not(:has(.blaind-alert-list)) { grid-template-columns: minmax(0, 1fr); }
-.blaind-alert-selection-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; padding: 0 4px 10px; border-bottom: 1px solid #E7E7E3; font-size: 12px; }
+.blaind-alert-selection-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; padding: 0 4px 10px; border-bottom: 1px solid var(--blaind-border); font-size: 12px; }
 .blaind-alert-selection-toolbar label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-.blaind-alert-select-all { width: 18px; height: 18px; margin: 0; accent-color: #191919; }
-.blaind-alert-select-all:focus-visible { outline: 2px solid #191919; outline-offset: 2px; }
-.blaind-alert-selection-count { color: #6F6F6B; font-size: 11px; white-space: nowrap; }
-.blaind-alert-list legend { margin-bottom: 10px; color: #191919; font-size: 13px; font-weight: 500; }
+.blaind-alert-select-all { width: 18px; height: 18px; margin: 0; accent-color: var(--blaind-ink); }
+.blaind-alert-select-all:focus-visible { outline: 2px solid var(--blaind-ink); outline-offset: 2px; }
+.blaind-alert-selection-count { color: var(--blaind-muted); font-size: 11px; white-space: nowrap; }
+.blaind-alert-list legend { margin-bottom: 10px; color: var(--blaind-ink); font-size: 13px; font-weight: 500; }
 .blaind-alert-items { display: grid; gap: 8px; max-height: 46vh; overflow: auto; padding: 4px; margin: -4px; }
 .blaind-alert-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 4px; border: 0; background: transparent; cursor: pointer; }
 .blaind-alert-item:hover { background: transparent; }
 .blaind-alert-item:has(input:checked) { background: transparent; }
-.blaind-alert-item:focus-within { outline: 2px solid #191919; outline-offset: 2px; }
-.blaind-alert-item input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: #191919; }
+.blaind-alert-item:focus-within { outline: 2px solid var(--blaind-ink); outline-offset: 2px; }
+.blaind-alert-item input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--blaind-ink); }
 .blaind-alert-item-copy { display: grid; gap: 3px; min-width: 0; flex: 1; }
-.blaind-alert-kind { overflow-wrap: anywhere; font-size: 12px; font-weight: 500; color: #6F6F6B; }
-.blaind-alert-value { overflow-wrap: anywhere; white-space: pre-wrap; color: #191919; font-size: 14px; line-height: 1.5; }
+.blaind-alert-kind { overflow-wrap: anywhere; font-size: 12px; font-weight: 500; color: var(--blaind-muted); }
+.blaind-alert-value { overflow-wrap: anywhere; white-space: pre-wrap; color: var(--blaind-ink); font-size: 14px; line-height: 1.5; }
 .blaind-alert-actions {
   display: flex; justify-content: space-between; align-items: center; gap: 10px;
-  margin-top: 24px; padding-top: 20px; border-top: 1px solid #E7E7E3;
+  margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--blaind-border);
 }
 .blaind-alert-actions > div { display: flex; gap: 8px; }
 .blaind-alert button {
-  min-height: 42px; padding: 10px 14px; border: 1px solid #E7E7E3; border-radius: 8px;
-  background: #FFFFFF; color: #191919; font-family: inherit; font-size: 13px;
+  min-height: 42px; padding: 10px 14px; border: 1px solid var(--blaind-border); border-radius: var(--blaind-radius-button);
+  background: var(--blaind-surface); color: var(--blaind-ink); font-family: inherit; font-size: 13px;
   font-weight: 500; line-height: 1.5; cursor: pointer;
   transition: border-color .15s ease, background .15s ease;
 }
-.blaind-alert button:hover { border-color: #E7E7E3; background: #FCFCFB; }
-.blaind-alert button:focus-visible, .blaind-alert-item input:focus-visible { outline: 2px solid #191919; outline-offset: 2px; }
-.blaind-alert .blaind-alert-cancel { border-color: transparent; color: #6F6F6B; }
-.blaind-alert .blaind-alert-mask { border-color: #191919; background: #191919; color: #FFFFFF; }
-.blaind-alert .blaind-alert-mask:hover { border-color: #191919; background: #191919; opacity: .9; }
-.blaind-alert .blaind-alert-highlight { display: inline; min-height: 0; padding: 0 3px; border: 0; border-radius: 3px; font: inherit; line-height: 1.4; color: #191919; background: #F4F3EE; border-bottom: 1px dashed #6F6F6B; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
-.blaind-alert .blaind-alert-highlight[data-state="selected"] { color: #FFFFFF; background: #191919; border-bottom: 1px solid #191919; }
+.blaind-alert button:hover { border-color: var(--blaind-border); background: var(--blaind-inset); }
+.blaind-alert button:focus-visible, .blaind-alert-item input:focus-visible { outline: 2px solid var(--blaind-ink); outline-offset: 2px; }
+.blaind-alert .blaind-alert-cancel { border-color: transparent; color: var(--blaind-muted); }
+.blaind-alert .blaind-alert-mask { border-color: var(--blaind-ink); background: var(--blaind-ink); color: var(--blaind-surface); }
+.blaind-alert .blaind-alert-mask:hover { border-color: var(--blaind-ink); background: var(--blaind-ink); opacity: .9; }
+.blaind-alert .blaind-alert-highlight { display: inline; min-height: 0; padding: 0 3px; border: 0; border-radius: 3px; font: inherit; line-height: 1.4; color: var(--blaind-ink); background: var(--blaind-soft); border-bottom: 1px dashed var(--blaind-muted); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.blaind-alert .blaind-alert-highlight[data-state="selected"] { color: var(--blaind-surface); background: var(--blaind-ink); border-bottom: 1px solid var(--blaind-ink); }
 .blaind-alert button.blaind-alert-highlight:hover { background: #ECECE9; }
-.blaind-alert button.blaind-alert-highlight[data-state="selected"]:hover { background: #191919; color: #FFFFFF; }
-.blaind-alert .blaind-alert-highlight.is-active { outline: 2px solid #191919; outline-offset: 1px; }
+.blaind-alert button.blaind-alert-highlight[data-state="selected"]:hover { background: var(--blaind-ink); color: var(--blaind-surface); }
+.blaind-alert .blaind-alert-highlight.is-active { outline: 2px solid var(--blaind-ink); outline-offset: 1px; }
 @media (max-width: 760px) {
   .blaind-alert-workspace { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .blaind-alert-document { min-height: 140px; max-height: 25vh; padding: 16px; }

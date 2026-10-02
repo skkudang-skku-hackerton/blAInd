@@ -5,6 +5,7 @@ import { DEFAULT_MASKING_PREFERENCES, PII_LABELS, type MaskingPreferences, type 
 import { loadMaskingPreferences, saveMaskingPreferences } from '../../shared/masking-preferences';
 import { ensureAlertFonts } from '../../alert/typography';
 import logoUrl from '../../alert/assets/blaind-B-light.svg';
+import '../../alert/popup-theme.css';
 import './settings.css';
 
 const settingsLabels = { ...PII_LABELS, CVC: '카드 보안코드', USER_ID: '사용자 아이디' };

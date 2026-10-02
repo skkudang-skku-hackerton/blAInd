@@ -4,9 +4,11 @@ import { createHoldNotice } from '../../src/features/review/hold-notice';
 import { createProcessingIndicator } from '../../src/modules/sites/gemini/file-upload/processing-indicator';
 
 const notice = createHoldNotice();
-notice.show('문서의 개인정보를 검사하고 있습니다. 업로드를 보류합니다.');
+const startButton = document.querySelector<HTMLButtonElement>('#start')!;
+startButton.focus();
+notice.show('문서를 처리하지 못했습니다. 다시 시도해 주세요.');
 createProcessingIndicator().show({ fileCount: 1, fileNames: ['sample.pdf'] });
-document.querySelector('#start')!.addEventListener('click', () => {
+startButton.addEventListener('click', () => {
   const controller = new AbortController();
   const context = captureUploadContext(document.querySelector('input'), document);
   const unwatch = context.watch(() => controller.abort());

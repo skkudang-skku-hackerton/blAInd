@@ -60,15 +60,8 @@ export default defineContentScript({
       onStage(stage: string) {
         documentStage = stage;
         if (stage === 'extracting') documentFailed = false;
-        if (stage === 'scanning' || stage === 'reviewing') {
-          notice.dispose();
-          return;
-        }
-        const labels: Record<string, string> = {
-          extracting: '문서에서 텍스트를 추출하고 있습니다. 업로드를 보류합니다.',
-          rebuilding: '선택한 항목을 마스킹한 파일을 만들고 있습니다.',
-        };
-        notice.show(labels[stage] ?? '문서를 처리하고 있습니다.');
+        // Progress and item selection already have their own central UI.
+        if (!documentFailed) notice.dispose();
       },
       onError(error: unknown) {
         documentFailed = true;

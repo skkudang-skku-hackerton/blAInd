@@ -15,6 +15,10 @@ test.beforeAll(async () => {
       response.end(`document.addEventListener('pointerdown', event => {
         const menu = document.querySelector('#upload-menu');
         if (menu && !event.composedPath().includes(menu) && event.target.id !== 'start') menu.remove();
+      }, true);
+      document.documentElement.dataset.pageEvents = '0';
+      for (const type of ['click', 'keydown', 'keyup']) document.addEventListener(type, () => {
+        document.documentElement.dataset.pageEvents = String(Number(document.documentElement.dataset.pageEvents) + 1);
       }, true);`);
     } else {
       response.setHeader('Content-Security-Policy', "script-src 'self'; object-src 'none'");
@@ -49,6 +53,7 @@ interface Driver {
   navigate(): Promise<void>;
   evaluate<T>(script: string): Promise<T>;
   click(selector: string, frame?: boolean): Promise<void>;
+  press?(key: string): Promise<void>;
   reviewVisible(): Promise<boolean>;
   close(): Promise<void>;
 }
@@ -67,6 +72,7 @@ async function chromeDriver(path: string): Promise<Driver> {
       if (inside) await frame.locator(selector).click();
       else await page.locator(selector.replaceAll(' >>> ', ' ')).click();
     },
+    press: key => page.keyboard.press(key),
     reviewVisible: () => frame.locator('[role=dialog]').isVisible().catch(() => false),
     close: () => context.close(),
   };
@@ -144,10 +150,27 @@ test('real extension: status clicks, isolated review, approve and cancel', async
     for (const action of ['approve', 'cancel', 'navigate']) {
       await driver.navigate();
       await expect.poll(() => driver.evaluate('return !!document.querySelector("[data-blaind-notice]")')).toBe(true);
+      if (!firefox) {
+        await expect.poll(() => driver.evaluate(`return !!document.querySelector('[data-blaind-notice]')
+          ?.shadowRoot.querySelector('[role="dialog"][aria-modal="true"]')`)).toBe(true);
+        const closeFocused = () => driver.evaluate(`const host = document.querySelector('[data-blaind-notice]');
+          return !!host && document.activeElement === host && host.shadowRoot.activeElement === host.shadowRoot.querySelector('button');`);
+        await expect.poll(closeFocused).toBe(true);
+        for (const key of ['Tab', 'Shift+Tab']) {
+          await driver.press!(key);
+          await expect.poll(closeFocused).toBe(true);
+        }
+      }
       await driver.click('[data-blaind-notice] >>> strong');
+      await expect.poll(() => driver.evaluate('return !!document.querySelector("#upload-menu")')).toBe(true);
+      if (!firefox && action === 'cancel') await driver.press!('Escape');
+      else if (!firefox && action === 'navigate') await driver.press!('Enter');
+      else await driver.click('[data-blaind-notice] >>> button');
+      await expect.poll(() => driver.evaluate('return !!document.querySelector("[data-blaind-notice]")')).toBe(false);
+      if (!firefox) await expect.poll(() => driver.evaluate('return document.activeElement?.id')).toBe('start');
       await driver.click('#blaind-gemini-processing-indicator >>> .title');
       await expect.poll(() => driver.evaluate('return !!document.querySelector("#upload-menu")')).toBe(true);
-      await driver.click('[data-blaind-notice] >>> button');
+      await expect.poll(() => driver.evaluate('return document.documentElement.dataset.pageEvents')).toBe('0');
       await driver.click('#start');
       await expect.poll(() => driver.reviewVisible()).toBe(true);
       await driver.click('.blaind-alert-header', true);

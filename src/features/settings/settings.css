@@ -1,31 +1,32 @@
-:root { font-family: "blAInd Numerals", "IBM Plex Sans KR", sans-serif; color: #191919; background: #FCFCFB; font-synthesis: none; color-scheme: light; }
+:root { font-family: var(--blaind-font); color: var(--blaind-ink); background: var(--blaind-inset); font-synthesis: none; color-scheme: light; }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: inherit; }
-body.popup { width: 340px; }
+body.popup { width: 340px; background: var(--blaind-surface); }
 button, input { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: default; opacity: .4; }
-.settings { max-width: 340px; margin: 0 auto; padding: 16px 16px 0; }
-.settings-header { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 500; line-height: 1.5; color: #6F6F6B; }
+.settings { max-width: 340px; margin: 0 auto; padding: 16px 16px 0; background: var(--blaind-surface); }
+body:not(.popup) .settings { width: calc(100% - 32px); margin: 24px auto; border: 1px solid var(--blaind-border); border-radius: var(--blaind-radius-panel); box-shadow: var(--blaind-shadow); }
+.settings-header { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 500; line-height: 1.5; color: var(--blaind-muted); }
 .settings-logo { display: block; width: 94px; height: auto; flex-shrink: 0; }
-.label-list { border: 1px solid #E7E7E3; border-radius: 10px; padding: 0; margin: 12px 0 0; overflow: hidden; background: #FFF; min-width: 0; }
+.label-list { border: 1px solid var(--blaind-border); border-radius: var(--blaind-radius-inset); padding: 0; margin: 12px 0 0; overflow: hidden; background: var(--blaind-inset); min-width: 0; }
 .label-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 5px 10px; }
-.label-row + .label-row { border-top: 1px solid #F0F0ED; }
+.label-row + .label-row { border-top: 1px solid var(--blaind-border); }
 .label-name { font-size: 12px; font-weight: 500; line-height: 1.5; word-break: keep-all; }
-.policy-switch { display: flex; padding: 2px; gap: 2px; background: #F4F3EE; border: 1px solid #E7E7E3; border-radius: 6px; }
+.policy-switch { display: flex; padding: 2px; gap: 2px; background: var(--blaind-soft); border: 1px solid var(--blaind-border); border-radius: var(--blaind-radius-button); }
 .policy-switch label { position: relative; cursor: pointer; }
 .policy-switch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; }
-.policy-switch label > span { display: block; padding: 3px 10px; border-radius: 3px; color: #6F6F6B; font-size: 11px; line-height: 16px; transition: background .15s, color .15s; }
-.policy-switch input:checked + span { background: #191919; color: #FFF; }
-.policy-switch input:focus-visible + span, button:focus-visible { outline: 2px solid #191919; outline-offset: 3px; }
+.policy-switch label > span { display: block; padding: 3px 10px; border-radius: 4px; color: var(--blaind-muted); font-size: 11px; line-height: 16px; transition: background .15s, color .15s; }
+.policy-switch input:checked + span { background: var(--blaind-ink); color: var(--blaind-surface); }
+.policy-switch input:focus-visible + span, button:focus-visible { outline: 2px solid var(--blaind-ink); outline-offset: 2px; }
 .label-list:disabled { opacity: .55; }
-.settings-footer { position: sticky; bottom: 0; padding: 10px 0 12px; background: #FCFCFB; border-top: 1px solid #E7E7E3; margin-top: 12px; }
-.save-status { min-height: 18px; margin: 0 0 6px; font-size: 10px; color: #6F6F6B; }
+.settings-footer { position: sticky; bottom: 0; padding: 10px 0 12px; background: var(--blaind-surface); border-top: 1px solid var(--blaind-border); margin-top: 12px; }
+.save-status { min-height: 18px; margin: 0 0 6px; font-size: 10px; color: var(--blaind-muted); }
 .save-status.error { color: #A33333; }
 .footer-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.reset { border: 0; padding: 7px 0; color: #6F6F6B; background: transparent; font-size: 11px; }
-.reset:hover:enabled { color: #191919; }
-.save { background: #191919; color: #FFF; padding: 8px 16px; border: 1px solid #191919; border-radius: 6px; font-size: 12px; font-weight: 500; }
-.save:hover:enabled { background: #353532; }
-@media (min-width: 600px) { .settings { padding-top: 24px; } }
-@media (prefers-reduced-motion: reduce) { .policy-switch label > span { transition: none; } }
+.footer-actions button { min-height: 36px; border: 1px solid var(--blaind-border); border-radius: var(--blaind-radius-button); padding: 8px 12px; font-size: 12px; font-weight: 500; line-height: 1.5; transition: background .15s, opacity .15s; }
+.reset { color: var(--blaind-ink); background: var(--blaind-surface); }
+.reset:hover:enabled { background: var(--blaind-inset); }
+.footer-actions .save { background: var(--blaind-ink); color: var(--blaind-surface); border-color: var(--blaind-ink); }
+.save:hover:enabled { opacity: .9; }
+@media (prefers-reduced-motion: reduce) { .policy-switch label > span, .footer-actions button { transition: none; } }
