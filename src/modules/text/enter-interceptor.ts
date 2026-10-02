@@ -1,0 +1,92 @@
+import type { TextEnterInterceptor, TextEnterInterceptorOptions } from './types.ts';
+
+export function createTextEnterInterceptor(
+  options: TextEnterInterceptorOptions,
+): TextEnterInterceptor {
+  // Window capture는 document/입력창에 등록된 페이지 핸들러보다 먼저 실행됩니다.
+  const root = options.root ?? window;
+  let started = false;
+  let composing = new WeakSet<HTMLElement>();
+  let heldEditor: HTMLElement | null = null;
+
+  function hold(event: Event): void {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
+  function onKeyDown(event: Event): void {
+    const keyboard = event as KeyboardEvent;
+    if (keyboard.key !== 'Enter') return;
+    heldEditor = null;
+    if (
+      keyboard.shiftKey || keyboard.ctrlKey || keyboard.altKey || keyboard.metaKey ||
+      keyboard.isComposing || keyboard.keyCode === 229
+    ) return;
+
+    const editor = options.adapter.findEditor(event);
+    if (!editor || composing.has(editor)) return;
+
+    let text: string;
+    try {
+      text = options.adapter.readText(editor);
+    } catch (error) {
+      heldEditor = editor;
+      hold(event);
+      options.onError?.(error);
+      return;
+    }
+    // 파일만 첨부된 빈 입력창은 텍스트 인터셉트 대상이 아닙니다.
+    if (text.trim().length === 0) return;
+
+    heldEditor = editor;
+    hold(event); // 비동기 모델 호출보다 먼저, 현재 이벤트에서 전송을 끊습니다.
+    if (keyboard.repeat) return;
+
+    try {
+      options.onIntercept({ siteId: options.adapter.siteId, editor, text });
+    } catch (error) {
+      options.onError?.(error);
+    }
+  }
+
+  function onEnterFollowup(event: Event): void {
+    const keyboard = event as KeyboardEvent;
+    if (keyboard.key !== 'Enter' || !heldEditor) return;
+    // 같은 Enter의 keypress/keyup을 전송에 쓰는 페이지도 함께 보류합니다.
+    if (options.adapter.findEditor(event) === heldEditor) hold(event);
+    if (event.type === 'keyup') heldEditor = null;
+  }
+
+  function onCompositionStart(event: Event): void {
+    const editor = options.adapter.findEditor(event);
+    if (editor) composing.add(editor);
+  }
+
+  function onCompositionEnd(event: Event): void {
+    const editor = options.adapter.findEditor(event);
+    if (editor) composing.delete(editor);
+  }
+
+  const listeners: [string, EventListener][] = [
+    ['keydown', onKeyDown],
+    ['keypress', onEnterFollowup],
+    ['keyup', onEnterFollowup],
+    ['compositionstart', onCompositionStart],
+    ['compositionend', onCompositionEnd],
+  ];
+
+  return {
+    start() {
+      if (started) return;
+      started = true;
+      for (const [type, listener] of listeners) root.addEventListener(type, listener, true);
+    },
+    stop() {
+      if (!started) return;
+      started = false;
+      for (const [type, listener] of listeners) root.removeEventListener(type, listener, true);
+      composing = new WeakSet();
+      heldEditor = null;
+    },
+  };
+}

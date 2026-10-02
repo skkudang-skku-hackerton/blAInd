@@ -5,6 +5,8 @@ export const REGISTERED_SITES = [
   { id: 'gemini', name: 'Gemini', origin: 'https://gemini.google.com' },
 ] as const;
 
+export type RegisteredSiteId = (typeof REGISTERED_SITES)[number]['id'];
+
 export const REGISTERED_SITE_MATCHES = REGISTERED_SITES.map(
   (site) => `${site.origin}/*`,
 );

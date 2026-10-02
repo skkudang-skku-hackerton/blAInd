@@ -83,7 +83,7 @@ function rebuildFormData(form: FormData, replacements: Map<File, File>): FormDat
   return next;
 }
 
-function isBinaryBody(body: BodyInit | null | undefined): boolean {
+function isBinaryBody(body: unknown): boolean {
   return body instanceof Blob || body instanceof ArrayBuffer || ArrayBuffer.isView(body);
 }
 
