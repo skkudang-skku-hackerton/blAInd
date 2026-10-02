@@ -13,7 +13,7 @@ export default defineConfig({
   projects: [
     { name: 'chromium', testIgnore: '**/firefox-compat.spec.ts', use: { browserName: 'chromium' } },
     { name: 'firefox', testMatch: [
-      '**/firefox-compat.spec.ts', '**/pdf-module.spec.ts', '**/docx-module.spec.ts', '**/hwpx-module.spec.ts',
+      '**/firefox-compat.spec.ts', '**/pdf-module.spec.ts', '**/docx-module.spec.ts', '**/hwpx-module.spec.ts', '**/document-review.spec.ts',
     ], use: { browserName: 'firefox' } },
   ],
   webServer: process.env.PII_MODEL_E2E === '1' ? {

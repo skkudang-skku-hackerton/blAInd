@@ -1,9 +1,14 @@
+import { protectStatusUi } from '../../shared/status-ui-events.ts';
+
 /** 검사 진행과 전송 보류 상태를 표시하는 안내. */
 export function createHoldNotice(page: Document = document) {
   let host: HTMLDivElement | null = null;
   let messageNode: HTMLParagraphElement | null = null;
+  let unprotect: (() => void) | undefined;
 
   function dismiss(): void {
+    unprotect?.();
+    unprotect = undefined;
     host?.remove();
     host = null;
     messageNode = null;
@@ -16,7 +21,7 @@ export function createHoldNotice(page: Document = document) {
         host = page.createElement('div');
         host.dataset.blaindNotice = 'hold';
         host.style.cssText = 'all:initial;position:fixed;right:20px;bottom:20px;z-index:2147483647;';
-        const shadow = host.attachShadow({ mode: 'closed' });
+        const shadow = host.attachShadow({ mode: 'open' });
         const style = page.createElement('style');
         style.textContent = `
           :host { color-scheme: light; }
@@ -38,7 +43,7 @@ export function createHoldNotice(page: Document = document) {
         const close = page.createElement('button');
         close.type = 'button';
         close.textContent = '닫기';
-        close.addEventListener('click', dismiss);
+        unprotect = protectStatusUi(host, close, dismiss);
         panel.append(title, messageNode, close);
         shadow.append(style, panel);
         (page.body ?? page.documentElement).append(host);

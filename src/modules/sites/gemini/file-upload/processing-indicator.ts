@@ -3,11 +3,13 @@
  *
  * 파일을 가로채 문서 모듈이 처리하는 동안 사용자에게 "검사 중"임을 알린다.
  * 사이트 CSS와 충돌하지 않도록 Shadow DOM 안에 렌더링하고, 페이지 조작을 막지 않도록
- * pointer-events: none 으로 둔다.
+ * 안내를 누른 클릭이 뒤쪽 업로드 메뉴를 닫지 않도록 입력 이벤트를 격리한다.
  *
  * 이 UI는 코어의 승인/탐지 결과를 표시하지 않는다. 그건 features/review 의 몫이다.
  * 여기서는 순수하게 "처리 중" 상태만 보여준다.
  */
+
+import { protectStatusUi } from '../../../../shared/status-ui-events';
 
 export interface ProcessingIndicatorLabels {
   /** 제목. 기본 "파일 검사 중" */
@@ -72,7 +74,7 @@ const STYLE = `
   font-size: 13px;
   line-height: 1.35;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
-  pointer-events: none;
+  pointer-events: auto;
   -webkit-font-smoothing: antialiased;
   opacity: 0;
   transition: opacity 140ms ease, transform 140ms ease;
@@ -115,12 +117,15 @@ export function createProcessingIndicator(
   let filesEl: HTMLElement | null = null;
   let detailEl: HTMLElement | null = null;
   let visible = false;
+  let unprotect: (() => void) | undefined;
 
   function buildAndMount(): void {
     // 이전 인스턴스/중복 호스트 제거
     document.getElementById(HOST_ID)?.remove();
 
     host = document.createElement('div');
+    unprotect?.();
+    unprotect = protectStatusUi(host);
     host.id = HOST_ID;
     host.style.cssText =
       `all: initial; position: fixed; z-index: ${options.zIndex ?? 2147483000}; ` +
@@ -188,6 +193,8 @@ export function createProcessingIndicator(
     window.setTimeout(() => {
       // 그 사이 다시 보이지 않았으면 DOM 에서 제거해 누수를 막는다.
       if (!visible && toRemove === host) {
+        unprotect?.();
+        unprotect = undefined;
         toRemove.remove();
         host = null;
         wrap = null;
@@ -199,6 +206,8 @@ export function createProcessingIndicator(
   }
 
   function destroy(): void {
+    unprotect?.();
+    unprotect = undefined;
     visible = false;
     host?.remove();
     host = null;

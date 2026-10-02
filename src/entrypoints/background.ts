@@ -7,6 +7,7 @@ import {
 import { PiiError } from '../core/api/errors';
 import { installDocumentServer } from '../shared/messaging/document-server';
 import { DOCUMENT_CHANNEL } from '../shared/messaging/document-client';
+import { installReviewRelay } from '../shared/messaging/review-channel';
 import { installPiiServer, cancelledError } from '../shared/messaging/pii-server';
 import { cancelMessage, errorResponse, isStatusMessage, ownsSender, PII_CHANNEL, requestTimeout, validateResponse,
   type MessageListener, type MessagingRuntime } from '../shared/messaging/types';
@@ -118,6 +119,7 @@ export function installPiiBackground(
 }
 
 export default defineBackground(() => {
+  installReviewRelay(browser.runtime);
   if (import.meta.env.FIREFOX) {
     installDocumentServer(browser.runtime as unknown as MessagingRuntime, 'background');
   } else {
