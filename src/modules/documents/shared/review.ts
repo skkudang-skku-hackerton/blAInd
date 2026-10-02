@@ -85,13 +85,8 @@ export function resolveReview(request: AlertReviewRequest, decision: AlertReview
     }
   }
   if (expected.size) throw new Error('Review omitted detections');
-  const masks = request.segments.map(({ id }) => ({ segmentId: id, spans: mergeSpans(selected.get(id) ?? []) }));
-  // The current Alert contract promises nonMasking stays unchanged. Reject contradictory
-  // overlap rather than silently introducing an undocumented masking-priority policy.
-  for (const item of decision.confirm.nonMasking) {
-    if (masks.find((m) => m.segmentId === item.segmentId)!.spans.some(
-      (span) => span.start < item.span.end && item.span.start < span.end,
-    )) throw new Error('Masking overlaps an explicitly retained detection');
-  }
-  return masks;
+  // nonMasking adds no mask; it cannot veto automatic or explicitly selected
+  // protection over shared characters. Do not extend masks into its exclusive
+  // coverage. This matches the text processor's selected-span union policy.
+  return request.segments.map(({ id }) => ({ segmentId: id, spans: mergeSpans(selected.get(id) ?? []) }));
 }

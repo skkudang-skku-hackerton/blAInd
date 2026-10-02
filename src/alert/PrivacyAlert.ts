@@ -43,7 +43,7 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
   const autoCounts = new Map<string, number>();
   for (const d of analysis.autoMaskedDetections) autoCounts.set(d.type, (autoCounts.get(d.type) ?? 0) + 1);
   description.textContent = analysis.hasConfirmItems
-    ? '자동 보호 대상은 항상 마스킹됩니다. 아래 항목은 가릴지 선택할 수 있습니다.'
+    ? '자동 보호 대상은 항상 마스킹됩니다. 아래 항목은 가릴지 선택할 수 있습니다. 겹치는 구간은 자동 보호 또는 선택한 마스킹이 우선합니다.'
     : analysis.autoMaskedDetections.length ? '아래 정보는 처리 모듈에서 자동으로 마스킹됩니다.' : '개인정보가 탐지되지 않았습니다. 확인 후 진행해 주세요.';
   if (autoCounts.size) {
     const summary = [...autoCounts].map(([type, count]) => `${labels[type] ?? type} ${count}개`).join(' · ');

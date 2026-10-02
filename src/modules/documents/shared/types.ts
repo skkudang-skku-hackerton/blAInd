@@ -15,6 +15,7 @@ export type AlertReviewDecision =
   | {
       status: 'approved';
       autoMask: ReviewItem[];
+      /** nonMasking adds no mask; automatic/selected masks win on shared characters. */
       confirm: { masking: ReviewItem[]; nonMasking: ReviewItem[] };
     };
 

@@ -6,6 +6,8 @@ import { createReviewRequest, resolveReview } from '../../src/modules/documents/
 import { DEFAULT_LIMITS, type AlertReviewDecision, type AlertReviewRequest, type ReviewItem } from '../../src/modules/documents/pdf/types';
 import type { PiiDetectorApi } from '../../src/core/api/pii-detector';
 import { PII_TYPES } from '../../src/core/pii/types';
+import { analyzeDetections, buildReviewResult } from '../../src/alert/policy';
+import { deduplicateDetections } from '../../src/core/detector/ko-pii/dedup';
 
 function fixture(lines = ['김민수 전화 010-1234-5678', '김민수 retained']): Uint8Array<ArrayBuffer> {
   const buffer = new mupdf.Buffer();
@@ -101,18 +103,58 @@ describe('PDF review contract', () => {
     expect(() => resolveReview(request, decision)).toThrow();
   });
 
-  it('rejects conflicting mask/keep spans rather than silently violating nonMasking', () => {
+  it('gives automatic masking precedence over an overlapping unselected Confirm', () => {
     const request = createReviewRequest([{ id: 'page-1', text: '123456' }], [{ segmentId: 'page-1', detections: [
       { type: 'PHONE', confidence: 1, span: { start: 0, end: 6 } },
       { type: 'GENERIC_ID', confidence: 1, span: { start: 1, end: 4 } },
     ] }]);
     const items = request.segments[0]!.detections.map(({ type, span, word }) => ({ segmentId: 'page-1', type, span, word }));
-    expect(() => resolveReview(request, { status: 'approved', autoMask: [items[0]!],
-      confirm: { masking: [], nonMasking: [items[1]!] } })).toThrow(/overlaps/);
+    expect(resolveReview(request, { status: 'approved', autoMask: [items[0]!],
+      confirm: { masking: [], nonMasking: [items[1]!] } })).toEqual([
+      { segmentId: 'page-1', spans: [{ start: 0, end: 6 }] },
+    ]);
   });
 });
 
 describe('PDF pipeline with real PDFs', () => {
+  it('rebuilds after default approval of overlapping model constituents and keeps the unselected suffix', async () => {
+    const errors: unknown[] = [];
+    const overlappingDetector: PiiDetectorApi = { ...detector,
+      scanSegments: async (segments) => segments.map(({ id, text }) => {
+        const start = text.indexOf('010-1234-5678');
+        return { segmentId: id, detections: deduplicateDetections([
+          { type: 'PHONE', confidence: 0.99, span: { start, end: start + 13 },
+            chunkIndex: 0, truncatedStart: false, truncatedEnd: false },
+          { type: 'GENERIC_ID', confidence: 0.9,
+            span: { start: start + 4, end: text.indexOf('retained') + 8 },
+            chunkIndex: 1, truncatedStart: false, truncatedEnd: false },
+        ]) };
+      }),
+    };
+    const review = vi.fn(async (request: AlertReviewRequest) => {
+      const segment = request.segments[0]!;
+      const decision = buildReviewResult(analyzeDetections(segment.text, segment.detections, segment.id));
+      expect(decision.autoMask).toHaveLength(1);
+      expect(decision.confirm.nonMasking).toHaveLength(1);
+      return decision;
+    });
+    const processor = createPdfProcessor({ detector: overlappingDetector, review, openPdf,
+      onError: (error) => errors.push(error) });
+    const file = await processor(new File([fixture(['김민수 전화 010-1234-5678 retained'])], 'input.pdf'),
+      new AbortController().signal);
+    expect(errors).toEqual([]);
+    expect(file).not.toBeNull();
+    const output = mupdf.Document.openDocument(await file!.arrayBuffer(), 'application/pdf');
+    const page = output.loadPage(0), text = page.toStructuredText('');
+    try {
+      expect(text.asText()).not.toContain('010-1234-5678');
+      expect(text.asText()).not.toContain('5678');
+      expect(text.asText()).toContain('김민수');
+      expect(text.asText()).toContain('retained');
+    } finally { text.destroy(); page.destroy(); output.destroy(); }
+    expect(review).toHaveBeenCalledOnce();
+  });
+
   it('rebuilds raster pages and invisible Korean text with only approved spans removed', async () => {
     const errors: unknown[] = [];
     const review = vi.fn(async (request: AlertReviewRequest) => approve(request));
