@@ -5,6 +5,8 @@ import {
   type BackgroundStatusResponse,
 } from '../shared/messaging/protocol';
 import { PiiError } from '../core/api/errors';
+import { installDocumentServer } from '../shared/messaging/document-server';
+import { DOCUMENT_CHANNEL } from '../shared/messaging/document-client';
 import { installPiiServer, cancelledError } from '../shared/messaging/pii-server';
 import { cancelMessage, errorResponse, isStatusMessage, ownsSender, PII_CHANNEL, requestTimeout, validateResponse,
   type MessageListener, type MessagingRuntime } from '../shared/messaging/types';
@@ -116,6 +118,20 @@ export function installPiiBackground(
 }
 
 export default defineBackground(() => {
+  if (import.meta.env.FIREFOX) {
+    installDocumentServer(browser.runtime as unknown as MessagingRuntime, 'background');
+  } else {
+    const ensureDocumentHost = createOffscreenManager(browser.offscreen as unknown as OffscreenApi);
+    browser.runtime.onMessage.addListener((message, sender, respond) => {
+      if (message?.channel !== DOCUMENT_CHANNEL || message.target !== 'background' ||
+          sender.id !== browser.runtime.id || typeof message.sessionId !== 'string') return;
+      const owner = JSON.stringify([sender.tab?.id ?? 'extension', sender.documentId ?? sender.url, sender.frameId]);
+      void ensureDocumentHost().then(() => browser.runtime.sendMessage({
+        ...message, owner, target: 'offscreen',
+      })).then(respond, () => respond({ ok: false, error: 'Document host unavailable' }));
+      return true;
+    });
+  }
   installPiiBackground(browser.runtime as unknown as MessagingRuntime,
     (browser as unknown as { offscreen?: OffscreenApi }).offscreen,
     browser.tabs as unknown as StatusTabs);

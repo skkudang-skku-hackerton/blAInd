@@ -1,4 +1,5 @@
-import { analyzeDetections, createFinalText, mountPrivacyAlert } from '../../alert';
+import { analyzeDetections, mountPrivacyAlert } from '../../alert';
+import { applyMasking } from '../../alert/masking';
 import type { TextScanResult } from './text-scan';
 
 interface TextReviewOptions {
@@ -33,12 +34,13 @@ export function createTextReviewController(options: TextReviewOptions) {
         const analysis = analyzeDetections(result.text, result.detections);
         unmount = mountPrivacyAlert(container, {
           analysis,
-          onComplete(selected) {
+          onComplete(decision) {
             // 승인 직전에 원문/입력창/대화를 다시 확인합니다.
             const current = options.getCurrentResult() === result;
             close();
             if (!current) return;
-            try { options.onApproved(createFinalText(analysis, selected)); }
+            try { options.onApproved(applyMasking(result.text, [...decision.autoMask, ...decision.confirm.masking]
+              .map(item => ({ ...item, confidence: 1 })))); }
             catch (error) { options.onError(error); }
           },
           onCancel() { close(); options.onCancelled(); },

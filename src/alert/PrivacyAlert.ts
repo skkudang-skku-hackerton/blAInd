@@ -1,10 +1,12 @@
-import { maskPreview } from './masking';
-import type { Detection, PrivacyAnalysis } from './types';
+import { buildReviewResult } from './policy';
+import type { ApprovedReview, Detection, PrivacyAnalysis } from './types';
 
 export interface PrivacyAlertOptions {
   analysis: PrivacyAnalysis;
-  onComplete: (selectedConfirm: readonly Detection[]) => void;
+  onComplete: (result: ApprovedReview) => void;
+  onSelectionChange?: (detection: Detection, masking: boolean) => void;
   onCancel?: () => void;
+  itemContext?: (detection: Detection) => string;
 }
 
 const labels: Record<string, string> = {
@@ -41,10 +43,8 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
   const autoCounts = new Map<string, number>();
   for (const d of analysis.autoMaskedDetections) autoCounts.set(d.type, (autoCounts.get(d.type) ?? 0) + 1);
   description.textContent = analysis.hasConfirmItems
-    ? '자동 보호 항목은 항상 가려집니다. 아래 항목은 가릴지 선택할 수 있습니다.'
-    : analysis.autoMaskedDetections.length > 0
-      ? '민감한 정보는 자동으로 가려집니다.'
-      : '탐지된 개인정보가 없습니다. 내용을 확인하고 진행해 주세요.';
+    ? '자동 보호 대상은 항상 마스킹됩니다. 아래 항목은 가릴지 선택할 수 있습니다.'
+    : analysis.autoMaskedDetections.length ? '아래 정보는 처리 모듈에서 자동으로 마스킹됩니다.' : '개인정보가 탐지되지 않았습니다. 확인 후 진행해 주세요.';
   if (autoCounts.size) {
     const summary = [...autoCounts].map(([type, count]) => `${labels[type] ?? type} ${count}개`).join(' · ');
     auto.textContent = `자동 보호 대상  ${summary}`;
@@ -56,10 +56,11 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     row.className = 'blaind-alert-item';
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox'; checkbox.value = String(index);
+    checkbox.addEventListener('change', () => options.onSelectionChange?.(detection, checkbox.checked));
     checkbox.setAttribute('aria-label', `${labels[detection.type] ?? detection.type} 가리기`);
     const content = document.createElement('span'); content.className = 'blaind-alert-item-copy';
     const kind = document.createElement('span'); kind.className = 'blaind-alert-kind';
-    kind.textContent = labels[detection.type] ?? detection.type;
+    kind.textContent = [options.itemContext?.(detection), labels[detection.type] ?? detection.type].filter(Boolean).join(' · ');
     const value = document.createElement('span'); value.className = 'blaind-alert-value';
     value.textContent = detectedText(analysis.originalText, detection);
     content.append(kind, value); row.append(checkbox, content); row.htmlFor = inputId; checkbox.id = inputId;
@@ -75,20 +76,21 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
   let finished = false;
   const finish = (selectedConfirm: readonly Detection[]) => {
     if (finished) return;
-    cleanup(); onComplete(selectedConfirm);
+    const result = buildReviewResult(analysis, selectedConfirm);
+    cleanup();
+    onComplete(result);
   };
   const selected = () => [...items.querySelectorAll<HTMLInputElement>('input:checked')]
-    .flatMap((input) => {
-      const detection = analysis.confirmDetections[Number(input.value)];
-      return detection ? [detection] : [];
-    });
+    .map((input) => analysis.confirmDetections[Number(input.value)])
+    .filter((detection): detection is Detection => detection !== undefined);
   const onKey = (event: KeyboardEvent) => {
     if (event.key === 'Escape') { event.preventDefault(); cancel(); }
     if (event.key === 'Tab') {
       const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)')];
       const first = focusable[0], last = focusable[focusable.length - 1];
-      if (event.shiftKey && (host.getRootNode() as Document | ShadowRoot).activeElement === first) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && (host.getRootNode() as Document | ShadowRoot).activeElement === last) { event.preventDefault(); first?.focus(); }
+      const root = host.getRootNode() as Document | ShadowRoot;
+      if (event.shiftKey && root.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && root.activeElement === last) { event.preventDefault(); first?.focus(); }
     }
   };
   const cancel = () => { if (finished) return; cleanup(); onCancel?.(); };
@@ -110,11 +112,6 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
   keep.addEventListener('click', onKeep); mask.addEventListener('click', onMask);
   dialog.focus();
   return cleanup;
-}
-
-export function getDetectionPreview(text: string, detection: Detection, autoMasked = false): string {
-  const value = detectedText(text, detection);
-  return autoMasked ? maskPreview(value, detection.type) : value;
 }
 
 const alertStyles = `

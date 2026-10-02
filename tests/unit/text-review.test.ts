@@ -80,7 +80,7 @@ describe('model result → privacy review → preview output', () => {
   });
   it('requires approval even when no detections exist', () => {
     const f = setup([]);
-    expect(f.root()!.querySelector('[role=dialog]')!.textContent).toContain('탐지된 개인정보가 없습니다');
+    expect(f.root()!.querySelector('[role=dialog]')!.textContent).toContain('개인정보가 탐지되지 않았습니다');
     expect(f.onApproved).not.toHaveBeenCalled();
     f.click('.blaind-alert-keep');
     expect(f.onApproved).toHaveBeenCalledExactlyOnceWith(f.editor.value);

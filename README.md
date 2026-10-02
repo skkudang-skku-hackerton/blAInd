@@ -219,7 +219,7 @@ PDF, DOCX, TXT/Markdown 모듈을 제공하며 이후 HWPX로 확장할 계획�
 - [DOCX 모듈 연결·지원 범위](src/modules/documents/docx/README.md)
 - [TXT/Markdown 모듈 연결·지원 범위](src/modules/documents/text/README.md)
 
-두 모듈은 동일한 코어 검사 API와 Alert 검토 데이터 계약을 사용합니다. 실제 코어 클라이언트와 검토 함수를 주입해야 하며, 사이트 진입점에 자동으로 연결되는 것은 아닙니다. DOCX는 OOXML 문서만 대상으로 하며 구형 바이너리 `.doc` 파일은 지원하지 않습니다.
+문서 모듈은 동일한 코어 검사 API와 Alert 검토 데이터 계약을 사용합니다. 현재 ChatGPT 진입점에는 PDF와 DOCX의 업로드 보류 → 검사 → 항목 선택 → 마스킹 파일 재첨부가 연결돼 있습니다. Chrome은 offscreen에서, Firefox는 background page에서 문서 Worker를 실행합니다. TXT/Markdown·HWPX와 다른 사이트의 업로드 연결은 별도 작업입니다. DOCX는 OOXML 문서만 대상으로 하며 구형 바이너리 `.doc` 파일은 지원하지 않습니다.
 
 `modules/documents/`는 추출한 텍스트와 원본 문서 위치의 연결, 내용 제거·치환, 파일 재생성을 담당합니다. 개인정보 탐지는 코어를 재사용하고 재생성 방식은 문서 형식별로 구현합니다.
 

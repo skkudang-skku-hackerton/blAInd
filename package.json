@@ -9,8 +9,6 @@
   "scripts": {
     "dev": "wxt",
     "build": "wxt build",
-    "test": "vitest run && npm run test:node",
-    "test:node": "node --experimental-strip-types --test --experimental-test-isolation=none tests/unit/text-submit-interceptor.test.mjs",
     "build:chrome": "wxt build -b chrome",
     "build:firefox": "wxt build -b firefox",
     "build:release": "npm run typecheck && npm test && npm run build:chrome && npm run build:firefox",

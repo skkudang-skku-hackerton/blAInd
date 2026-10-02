@@ -1,8 +1,14 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { createPiiDetectorClient, PiiError } from '../../core/api';
 import { createHoldNotice } from '../../features/review/hold-notice';
-import { createTextSender } from '../../features/review/text-send';
+import { createDocumentReview } from '../../features/review/document-review';
+import { createPdfProcessor } from '../../modules/documents/pdf';
+import { createDocxProcessor } from '../../modules/documents/docx';
+import { documentErrorNotice, documentErrorCode } from '../../modules/documents/shared/errors';
+import { createFileUploadInterceptor } from '../../modules/sites/chatgpt/file-upload';
+import { openPdfOffscreen, openDocxOffscreen } from '../../shared/messaging/document-client';
 import { createTextReviewController } from '../../features/review/text-review';
+import { createTextSender } from '../../features/review/text-send';
 import { createTextScanController } from '../../features/review/text-scan';
 import { getTextSiteAdapter } from '../../modules/sites/text-adapters';
 import { createTextSubmitInterceptor } from '../../modules/text';
@@ -27,6 +33,43 @@ export default defineContentScript({
     const notice = createHoldNotice();
     const adapter = getTextSiteAdapter(site.id);
     const detector = createPiiDetectorClient();
+    const documentReview = createDocumentReview();
+    let documentStage = '';
+    let documentFailed = false;
+    const documentOptions = {
+      detector, review: documentReview,
+      onStage(stage: string) {
+        documentStage = stage;
+        if (stage === 'extracting') documentFailed = false;
+        const labels: Record<string, string> = {
+          extracting: '문서에서 텍스트를 추출하고 있습니다. 업로드를 보류합니다.',
+          scanning: '문서의 개인정보를 검사하고 있습니다. 업로드를 보류합니다.',
+          reviewing: '확인 창에서 마스킹할 항목을 선택해 주세요.',
+          rebuilding: '선택한 항목을 마스킹한 파일을 만들고 있습니다.',
+        };
+        notice.show(labels[stage] ?? '문서를 처리하고 있습니다.');
+      },
+      onError(error: unknown) {
+        documentFailed = true;
+        console.error('[blAInd] Document processing failed', {
+          stage: documentStage,
+          code: error instanceof PiiError ? error.code : documentErrorCode(error),
+        }, error);
+        notice.show(`${documentErrorNotice(error)} 원본은 첨부되지 않았습니다.`);
+      },
+    };
+    const fileInterceptor = site.id === 'chatgpt' ? createFileUploadInterceptor({
+      processors: {
+        pdf: createPdfProcessor({ ...documentOptions, openPdf: openPdfOffscreen }),
+        docx: createDocxProcessor({ ...documentOptions, openDocx: openDocxOffscreen }),
+      },
+      onProcessed() { notice.show('검사가 끝난 파일을 ChatGPT에 첨부했습니다.'); },
+      onSkipped() {
+        if (!documentFailed) notice.show('문서 업로드를 취소했습니다. 파일은 첨부되지 않았습니다.');
+      },
+      onError: documentOptions.onError,
+    }) : undefined;
+    fileInterceptor?.start();
     let downloadProgress = -1;
     const onScanError = (error: unknown) => {
       console.error(`[blAInd] PII scan failed: ${site.name}`, {
@@ -78,12 +121,12 @@ export default defineContentScript({
       },
     });
     const unsubscribeStatus = detector.onStatus(status => {
-      if (!scanner.isScanning()) return;
+      if (!scanner.isScanning() && !(fileInterceptor?.isProcessing && documentStage === 'scanning')) return;
       if (status.state === 'downloading') {
         const progress = Math.round(status.progress * 100);
         if (progress === downloadProgress) return;
         downloadProgress = progress;
-        notice.show(`개인정보 검사 모델을 준비하고 있습니다 (${progress}%). 전송은 보류됩니다.`);
+        notice.show(`개인정보 검사 모델을 준비하고 있습니다 (${progress}%). 전송과 업로드는 보류됩니다.`);
       } else if (status.state === 'loading') {
         notice.show('개인정보 검사 모델을 불러오고 있습니다. 전송은 보류됩니다.');
       } else if (status.state === 'ready') {
@@ -119,6 +162,7 @@ export default defineContentScript({
     window.addEventListener('pagehide', cancel);
     navigation?.addEventListener('navigate', cancel);
     ctx.onInvalidated(() => {
+      fileInterceptor?.stop();
       interceptor.stop();
       window.removeEventListener('input', invalidate, true);
       window.removeEventListener('change', invalidate, true);
