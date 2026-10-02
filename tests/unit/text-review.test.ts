@@ -50,6 +50,19 @@ describe('model result → privacy review → preview output', () => {
     const f = setup(); f.click('.blaind-alert-keep');
     expect(f.onApproved).toHaveBeenCalledExactlyOnceWith('김민수 [PHONE_1]');
   });
+  it.each([false, true])('reviews constituents of a merged region independently (select Confirm: %s)', selectConfirm => {
+    const f = setup([{
+      type: 'PHONE', confidence: 0.99, span: { start: 0, end: 17 }, constituents: [
+        { type: 'PERSON', confidence: 0.95, span: { start: 0, end: 7 } },
+        { type: 'PHONE', confidence: 0.99, span: { start: 4, end: 17 } },
+      ],
+    }]);
+    expect(f.root()!.querySelectorAll('input')).toHaveLength(1);
+    expect(f.root()!.querySelector('.blaind-alert-value')!.textContent).toBe('김민수 010');
+    if (selectConfirm) f.root()!.querySelector('input')!.setAttribute('checked', '');
+    f.click(selectConfirm ? '.blaind-alert-mask' : '.blaind-alert-keep');
+    expect(f.onApproved).toHaveBeenCalledExactlyOnceWith(selectConfirm ? '[PERSON_1]' : '김민수 [PHONE_1]');
+  });
   it('cancel produces no output', () => {
     const f = setup(); f.click('.blaind-alert-cancel');
     expect(f.onApproved).not.toHaveBeenCalled();
@@ -80,7 +93,8 @@ describe('model result → privacy review → preview output', () => {
 
 describe('mask aliases', () => {
   it('reuses labels for exact values and assigns distinct values in original order', () => {
-    const d = (start: number, end: number) => ({ type: 'PERSON', confidence: 1, span: { start, end } });
+    const d = (start: number, end: number): TextScanResult['detections'][number] =>
+      ({ type: 'PERSON', confidence: 1, span: { start, end } });
     expect(applyMasking('김민수 이영희 김민수', [d(8, 11), d(4, 7), d(0, 3)]))
       .toBe('[PERSON_1] [PERSON_2] [PERSON_1]');
     expect(applyMasking('이영희', [d(0, 3)])).toBe('[PERSON_1]');

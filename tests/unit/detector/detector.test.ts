@@ -79,7 +79,10 @@ describe('KoPiiDetector', () => {
     const text = 'a'.repeat(600);
     const detections = await detector.scanText(text);
     expect(detections).toEqual([
-      { type: 'PHONE', confidence: expect.any(Number), span: { start: 420, end: 460 } },
+      { type: 'PHONE', confidence: expect.any(Number), span: { start: 400, end: 460 }, constituents: [
+        { type: 'PERSON', confidence: expect.any(Number), span: { start: 400, end: 450 } },
+        { type: 'PHONE', confidence: expect.any(Number), span: { start: 420, end: 460 } },
+      ] },
     ]);
     expect(await detector.scanSegments([{ id: 'first', text }, { id: 'second', text }])).toEqual([
       { segmentId: 'first', detections }, { segmentId: 'second', detections },

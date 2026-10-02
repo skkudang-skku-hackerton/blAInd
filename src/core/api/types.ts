@@ -3,11 +3,19 @@ export type { PiiType } from '../pii/types';
 
 export interface TextSegment { id: string; text: string }
 export interface ScanOptions { signal?: AbortSignal }
-export interface Detection {
+export interface DetectionConstituent {
   type: PiiType;
   confidence: number;
   /** Half-open UTF-16 offsets into the exact input string. */
   span: { start: number; end: number };
+}
+export interface Detection extends DetectionConstituent {
+  /**
+   * Present for merged overlapping regions. The outer span is their union;
+   * outer type/confidence describe the preferred representative, not every character.
+   * Apply type policies and user choices to these constituent spans, not the outer region.
+   */
+  constituents?: DetectionConstituent[];
 }
 export interface SegmentDetectionResult { segmentId: string; detections: Detection[] }
 export type PiiErrorCode = 'MODEL_NOT_READY' | 'MODEL_DOWNLOAD_FAILED' |
