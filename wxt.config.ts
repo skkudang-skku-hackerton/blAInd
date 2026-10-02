@@ -25,10 +25,12 @@ export default defineConfig({
     ...(browser === 'chrome' ? { minimum_chrome_version: '116' } : {}),
     permissions: browser === 'chrome' ? ['offscreen', 'unlimitedStorage', 'storage'] : ['unlimitedStorage', 'storage'],
     host_permissions: ['https://huggingface.co/*', 'https://*.hf.co/*'],
-    web_accessible_resources: [{
-      resources: ['document-review.html'],
-      matches: ['https://chatgpt.com/*', 'https://claude.ai/*', 'https://gemini.google.com/*'],
-    }],
+    web_accessible_resources: manifestVersion === 3
+      ? [{
+          resources: ['document-review.html'],
+          matches: ['https://chatgpt.com/*', 'https://claude.ai/*', 'https://gemini.google.com/*'],
+        }]
+      : ['document-review.html'],
     content_security_policy: manifestVersion === 3
       ? { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; worker-src 'self'" }
       : "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'",
@@ -40,14 +42,18 @@ export default defineConfig({
           data_collection_permissions: { required: ['none'] },
         },
       },
+    } : browser === 'safari' ? {
+      browser_specific_settings: {
+        safari: { strict_min_version: '16.4' },
+      },
     } : {}),
   }),
   hooks: {
     'build:publicAssets': async (wxt, files) => {
       const runtimeDir = resolve('node_modules/onnxruntime-web/dist');
       // ORT 1.30's /wasm entry uses the plain runtime; /webgpu uses Asyncify.
-      // Firefox disables WebGPU, while Chrome retains WASM as a fallback.
-      const variants = wxt.config.browser === 'firefox' ? [''] : ['', '.asyncify'];
+      // Chrome retains Asyncify for WebGPU; Firefox and Safari package plain WASM only.
+      const variants = wxt.config.browser === 'chrome' ? ['', '.asyncify'] : [''];
       for (const variant of variants) {
         for (const extension of ['mjs', 'wasm']) {
           const name = `ort-wasm-simd-threaded${variant}.${extension}`;

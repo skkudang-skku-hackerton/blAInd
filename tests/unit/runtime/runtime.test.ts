@@ -135,6 +135,38 @@ describe('KoPiiRuntime lifecycle and backend fallback', () => {
       wasmPaths: 'moz-extension://blaind-id/ort-wasm/', numThreads: 1, proxy: false,
     });
   });
+  it('resolves packaged WASM assets from a Safari WebExtension worker origin', async () => {
+    vi.stubGlobal('location', {
+      href: 'safari-web-extension://blaind-id/assets/inference.worker.js',
+      protocol: 'safari-web-extension:', origin: 'safari-web-extension://blaind-id',
+    });
+    const runtime = new KoPiiRuntime({ preferredBackend: 'wasm' });
+    await runtime.initialize();
+    expect(mocks.env.wasm).toEqual({
+      wasmPaths: 'safari-web-extension://blaind-id/ort-wasm/', numThreads: 1, proxy: false,
+    });
+  });
+  it('resolves packaged WASM assets from an embedded WebKit extension worker origin', async () => {
+    vi.stubGlobal('location', {
+      href: 'webkit-extension://blaind-id/assets/inference.worker.js',
+      protocol: 'webkit-extension:', origin: 'webkit-extension://blaind-id',
+    });
+    const runtime = new KoPiiRuntime({ preferredBackend: 'wasm' });
+    await runtime.initialize();
+    expect(mocks.env.wasm).toEqual({
+      wasmPaths: 'webkit-extension://blaind-id/ort-wasm/', numThreads: 1, proxy: false,
+    });
+  });
+  it('rejects WASM assets from another Safari extension origin', async () => {
+    vi.stubGlobal('location', {
+      href: 'safari-web-extension://blaind-id/assets/inference.worker.js',
+      protocol: 'safari-web-extension:', origin: 'safari-web-extension://blaind-id',
+    });
+    await expect(new KoPiiRuntime({
+      preferredBackend: 'wasm', wasmPaths: 'safari-web-extension://another-extension/ort-wasm/',
+    }).initialize()).rejects.toMatchObject({ code: 'MODEL_LOAD_FAILED' });
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
   it('promotes binary16 logits exactly, including signed zero and subnormals', async () => {
     const runtime = new KoPiiRuntime();
     await runtime.initialize();

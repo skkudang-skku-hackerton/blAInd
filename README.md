@@ -1,10 +1,10 @@
 # blAInd
 
-AI 웹사이트에 질문을 보내기 전에 개인정보를 감지하고, 사용자 선택에 따라 마스킹하는 크롬 확장 프로그램입니다. 텍스트 검사와 모델 추론은 사용자 기기에서 처리하도록 개발합니다.
+AI 웹사이트에 질문을 보내기 전에 개인정보를 감지하고, 사용자 선택에 따라 마스킹하는 브라우저 확장 프로그램입니다. 텍스트 검사와 모델 추론은 사용자 기기에서 처리하도록 개발합니다.
 
 ## 예정 기술 스택
 
-- 확장 프로그램: WXT, Manifest V3
+- 확장 프로그램: WXT, Manifest V2/V3
 - 화면: React, TypeScript
 - 로컬 추론: ONNX Runtime Web, Web Worker
 - 추론 환경: Offscreen Document, WebGPU 또는 WASM
@@ -56,11 +56,11 @@ npm run typecheck
 npm run build
 ```
 
-배포 전 검증과 두 브라우저 빌드는 `npm ci` 후 `npm run build:release`로 실행합니다.
-이 명령은 타입 검사와 두 단위 테스트 모음을 통과한 뒤 Chrome과 Firefox를 빌드합니다.
-`npm run build`는 빠른 Chrome 번들 생성용이며 타입 검사나 테스트를 실행하지 않습니다.
+배포 전 검증과 세 브라우저 빌드는 `npm ci` 후 `npm run build:release`로 실행합니다.
+이 명령은 타입 검사와 두 단위 테스트 모음을 통과한 뒤 Chrome, Firefox, Safari를 빌드합니다.
+`npm run build`는 세 브라우저 번들만 생성하며 타입 검사나 테스트를 실행하지 않습니다.
 ONNX Runtime은 외부 ESM/WASM 파일을 확장 내부 `ort-wasm/`에서 로드합니다.
-Chrome은 WASM과 WebGPU용 Asyncify 런타임을 포함하고 Firefox는 WASM 런타임만 포함합니다.
+Chrome은 plain WASM과 WebGPU용 Asyncify 런타임을 포함하고 Firefox와 Safari는 plain WASM 런타임만 포함합니다.
 
 1. 크롬 `chrome://extensions`에서 개발자 모드를 켜고, **압축해제된 확장 프로그램을 로드합니다**로 `.output/chrome-mv3`를 선택합니다.
 2. 이미 로드했다면 blAInd 카드의 새로고침 버튼을 누릅니다. 새 Background 설정을 반영하려면 확장도 다시 로드해야 합니다.
@@ -249,6 +249,7 @@ PDF, DOCX, TXT/Markdown 모듈을 제공하며 이후 HWPX로 확장할 계획�
 ```sh
 npm run build:chrome   # Chrome Manifest V3, offscreen inference host
 npm run build:firefox  # Firefox Manifest V2, background-page inference host
+npm run build:safari   # macOS Safari 16.4+ Manifest V2, background-page inference host
 npm run test:e2e:firefox
 ```
 
@@ -257,3 +258,15 @@ Worker를 실행합니다. Detector 메시지·취소 프로토콜은 동일하�
 사용합니다. Manifest는 Firefox의 데이터 수집 동의에 `none`을 선언합니다. 브라우저 E2E는
 파일 input 재주입과 문서 모듈 Worker/WASM을 확인하지만, 실제 확장 설치 후 모델 캐시·추론 및
 각 AI 사이트의 실서비스 DOM·업로드는 배포 전에 Firefox에서 별도 수동 검증이 필요합니다.
+
+Safari 빌드 산출물은 `.output/safari-mv2`에 생성됩니다. 현재 Safari 지원 범위는 persistent
+background page를 사용할 수 있는 macOS Safari 16.4 이상입니다. 이 디렉터리는 Safari에 직접
+배포하는 앱 번들이 아니므로 macOS에서 아래 명령으로 macOS 전용 Xcode 프로젝트를 생성한 뒤,
+Xcode에서 Apple Developer 팀과 앱·확장 Bundle ID 및 서명을 설정하고 빌드하거나 Archive해야
+합니다. Safari 확장 E2E는 자동화되어 있지 않으므로 패키징한 앱의 확장 활성화, 모델
+초기화·추론, 대상 사이트 동작을 수동 검증합니다. iOS/iPadOS는 background 수명과 모델 메모리
+제약 때문에 현재 지원하지 않습니다.
+
+```sh
+xcrun safari-web-extension-packager .output/safari-mv2 --macos-only
+```

@@ -94,7 +94,7 @@ export class KoPiiRuntime implements InferenceRuntime {
   private async createSession(backend: 'wasm' | 'webgpu'): Promise<void> {
     let ort: typeof Ort;
     if (backend === 'webgpu') {
-      if (import.meta.env.FIREFOX) throw new Error('WebGPU backend is disabled in Firefox builds');
+      if (import.meta.env.FIREFOX || import.meta.env.SAFARI) throw new Error('WebGPU backend is disabled in Firefox and Safari builds');
       ort = await import('onnxruntime-web/webgpu');
     } else ort = this.gpuOrt ?? await import('onnxruntime-web/wasm');
     if (backend === 'webgpu') this.gpuOrt = ort;
@@ -105,13 +105,13 @@ export class KoPiiRuntime implements InferenceRuntime {
     const extensionUrl = extensionApis.browser?.runtime?.getURL('ort-wasm/') ??
       extensionApis.chrome?.runtime?.getURL('ort-wasm/');
     const localOriginUrl = globalThis.location &&
-      ['moz-extension:', 'chrome-extension:'].includes(globalThis.location.protocol)
+      ['moz-extension:', 'chrome-extension:', 'safari-web-extension:', 'webkit-extension:'].includes(globalThis.location.protocol)
       ? new URL('/ort-wasm/', globalThis.location.href).href
       : undefined;
     const wasmPaths = this.options.wasmPaths ?? extensionUrl ?? localOriginUrl ?? '/ort-wasm/';
     const assetUrl = new URL(wasmPaths, globalThis.location?.href ?? 'http://localhost/');
     const applicationUrl = globalThis.location ? new URL(globalThis.location.href) : undefined;
-    if (!['http:', 'https:', 'chrome-extension:', 'moz-extension:'].includes(assetUrl.protocol) ||
+    if (!['http:', 'https:', 'chrome-extension:', 'moz-extension:', 'safari-web-extension:', 'webkit-extension:'].includes(assetUrl.protocol) ||
         (applicationUrl && (assetUrl.protocol !== applicationUrl.protocol || assetUrl.host !== applicationUrl.host)) ||
         (!applicationUrl && /^[a-z][a-z0-9+.-]*:|^\/\//i.test(wasmPaths))) {
       throw new Error('ORT assets must be bundled at a local application URL');

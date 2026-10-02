@@ -114,4 +114,24 @@ describe('MV3 background routing', () => {
     await Promise.resolve();
     expect(directRpc.dispose).toHaveBeenCalledOnce();
   });
+  it('runs Safari inference directly without creating or messaging an offscreen document', async () => {
+    const { runtime, listeners, sendMessage } = mockRuntime();
+    const offscreen = { hasDocument: vi.fn(), createDocument: vi.fn() };
+    const tabs = { query: vi.fn().mockResolvedValue([]), sendMessage: vi.fn() };
+    const directRpc = { request: vi.fn(async req => ready(req)), dispose: vi.fn() };
+    const createDirectRpc = vi.fn(() => directRpc);
+    const remove = installPiiBackground(runtime, offscreen, tabs, { browser: 'safari', createDirectRpc });
+    const req: PiiRequest = { ...request(), target: 'background' };
+    const response = deferred<unknown>();
+    const listener = [...listeners].find(candidate => candidate(req,
+      { id: runtime.id, url: 'https://chatgpt.com/', tab: { id: 4 } }, response.resolve) === true);
+    expect(listener).toBeDefined();
+    await expect(response.promise).resolves.toMatchObject({ type: 'pii:ready', requestId: req.requestId });
+    expect(createDirectRpc).toHaveBeenCalledOnce();
+    expect(directRpc.request).toHaveBeenCalledOnce();
+    expect(offscreen.hasDocument).not.toHaveBeenCalled();
+    expect(offscreen.createDocument).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
+    remove();
+  });
 });
