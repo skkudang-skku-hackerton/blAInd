@@ -20,7 +20,8 @@
 
 import { classifyFile } from './classify';
 import { isInternalEvent } from './event-guard';
-import { injectFilesIntoDrop, injectFilesIntoInput, resolveFileInput } from './file-injector';
+import { injectFilesIntoDrop, injectFilesIntoInput } from './file-injector';
+import { captureUploadContext, type UploadContext } from '../../upload-context';
 import { createProcessingIndicator, type ProcessingIndicator } from './processing-indicator';
 import type {
   DocumentKind,
@@ -38,6 +39,7 @@ export interface FileUploadInterceptor {
 
 interface ActiveBatch {
   controller: AbortController;
+  unwatch: () => void;
 }
 
 type ProcessOutcome =
@@ -94,6 +96,7 @@ export function createFileUploadInterceptor(
 
   function abortActive(): void {
     if (active) {
+      active.unwatch();
       active.controller.abort();
       active = null;
     }
@@ -130,6 +133,7 @@ export function createFileUploadInterceptor(
   async function process(
     files: readonly File[],
     source: FileSource,
+    context: UploadContext,
     reinject: (processedFiles: readonly File[]) => boolean,
   ): Promise<void> {
     if (files.length === 0) return;
@@ -139,7 +143,12 @@ export function createFileUploadInterceptor(
 
     const controller = new AbortController();
     const requestId = `gemini-file-${Date.now()}-${++sequence}`;
-    active = { controller };
+    const batch: ActiveBatch = { controller, unwatch: () => {} };
+    active = batch;
+    batch.unwatch = context.watch(() => {
+      if (active === batch) { abortActive(); hideIndicator(); }
+    });
+    if (controller.signal.aborted) { batch.unwatch(); return; }
 
     const fileNames = files.map((file) => file.name);
     log('captured', { requestId, source, names: fileNames });
@@ -154,7 +163,8 @@ export function createFileUploadInterceptor(
         }),
       );
 
-      if (controller.signal.aborted) {
+      if (controller.signal.aborted || !context.isValid()) {
+        controller.abort();
         log('discarded stale batch', { requestId });
         return;
       }
@@ -200,6 +210,7 @@ export function createFileUploadInterceptor(
         file: files[0]!,
       });
     } finally {
+      batch.unwatch();
       if (active?.controller === controller) {
         active = null;
         hideIndicator();
@@ -224,8 +235,9 @@ export function createFileUploadInterceptor(
     const accept = input.accept;
     input.value = '';
 
-    void process(files, 'input', (processedFiles) => {
-      const target = resolveFileInput(input, accept);
+    const context = captureUploadContext(input, root);
+    void process(files, 'input', context, (processedFiles) => {
+      const target = context.resolveInput(input, accept);
       return target ? injectFilesIntoInput(target, processedFiles) : false;
     });
   }
@@ -240,8 +252,9 @@ export function createFileUploadInterceptor(
     event.preventDefault();
 
     const target = event.target;
-    void process(files, 'drop', (processedFiles) => {
-      return injectFilesIntoDrop(target, processedFiles);
+    const context = captureUploadContext(target, root);
+    void process(files, 'drop', context, (processedFiles) => {
+      return context.isValid() && injectFilesIntoDrop(target, processedFiles, context.resolveInput(null));
     });
   }
 
@@ -255,8 +268,9 @@ export function createFileUploadInterceptor(
     event.preventDefault();
 
     const target = event.target;
-    void process(files, 'paste', (processedFiles) => {
-      return injectFilesIntoDrop(target, processedFiles);
+    const context = captureUploadContext(target, root);
+    void process(files, 'paste', context, (processedFiles) => {
+      return context.isValid() && injectFilesIntoDrop(target, processedFiles, context.resolveInput(null));
     });
   }
 
