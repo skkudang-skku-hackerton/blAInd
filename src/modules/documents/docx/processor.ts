@@ -1,24 +1,22 @@
-import { createReviewRequest, resolveReview } from './review';
-import { openPdfInWorker } from './worker-client';
-import { DEFAULT_LIMITS, type PdfProcessorOptions, type PdfSession } from './types';
 import { abortable } from '../shared/abortable';
+import { createReviewRequest, resolveReview } from '../shared/review';
+import { openDocxInWorker } from './worker-client';
+import { DEFAULT_LIMITS, type DocxProcessorOptions, type DocxSession } from './types';
 
-export { abortable } from '../shared/abortable';
-
-export function createPdfProcessor(options: PdfProcessorOptions) {
+export function createDocxProcessor(options: DocxProcessorOptions) {
   const limits = { ...DEFAULT_LIMITS, ...options.limits };
   for (const value of Object.values(limits)) {
-    if (!Number.isFinite(value) || value <= 0) throw new Error('Invalid PDF limits');
+    if (!Number.isFinite(value) || value <= 0) throw new Error('Invalid DOCX limits');
   }
-  return async function processPdf(file: File, signal: AbortSignal): Promise<File | null> {
-    let session: PdfSession | undefined;
+  return async function processDocx(file: File, signal: AbortSignal): Promise<File | null> {
+    let session: DocxSession | undefined;
     try {
       signal.throwIfAborted();
-      if (!file.size || file.size > limits.maxInputBytes) throw new Error('PDF input size limit exceeded');
+      if (!file.size || file.size > limits.maxInputBytes) throw new Error('DOCX input size limit exceeded');
       options.onStage?.('extracting', file);
       const bytes = await abortable(file.arrayBuffer(), signal);
       signal.throwIfAborted();
-      session = await (options.openPdf ?? openPdfInWorker)(bytes, limits, signal);
+      session = await (options.openDocx ?? openDocxInWorker)(bytes, limits, signal);
       signal.throwIfAborted();
       options.onStage?.('scanning', file);
       await abortable(options.detector.initialize(), signal);
@@ -37,9 +35,11 @@ export function createPdfProcessor(options: PdfProcessorOptions) {
       options.onStage?.('rebuilding', file);
       const output = await session.rebuild(masks, signal);
       signal.throwIfAborted();
-      if (output.byteLength > limits.maxOutputBytes) throw new Error('PDF output size limit exceeded');
+      if (output.byteLength > limits.maxOutputBytes) throw new Error('DOCX output size limit exceeded');
       // Do not carry a potentially sensitive source filename into the upload metadata.
-      return new File([output], 'masked-document.pdf', { type: 'application/pdf' });
+      return new File([output], 'masked-document.docx', {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
     } catch (error) {
       const cancelled = signal.aborted || (error as { code?: string } | null)?.code === 'CANCELLED';
       if (!cancelled) options.onError?.(error, file);

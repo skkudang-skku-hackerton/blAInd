@@ -28,6 +28,9 @@ const processors = { pdf: processPdf };
 
 ## API 준수
 
+Detector/Alert 데이터 타입, 승인 응답 검증, 취소 대기 헬퍼는 `../shared/`에 두고
+DOCX 모듈과 동일한 구현을 사용합니다. 기존 PDF 공개 타입과 함수는 유지합니다.
+
 - 코어 타입은 `src/core/api/`에서 가져옵니다. `initialize()` 후
   `scanSegments(segments, { signal })`만 사용합니다. Worker에 직접 추론을 요청하지 않습니다.
 - 모델 청킹은 코어 책임입니다. PDF는 페이지별 `TextSegment`만 생성합니다.
