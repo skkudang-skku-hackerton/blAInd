@@ -237,3 +237,17 @@ PDF, DOCX, TXT/Markdown 모듈을 제공하며 이후 HWPX로 확장할 계획�
 5. 사이트 모듈과 DOCX·HWPX 문서 모듈을 추가합니다.
 
 `npm test`는 Node.js 기본 테스트 러너와 LinkeDOM으로 Enter·클릭 보류, 버튼과 입력창의 연결, 한글 조합·줄바꿈 분기, 반복 입력, SPA 입력 영역 교체, 리스너 수명과 오류 시 보류를 검증합니다. 테스트는 같은 프로세스에서 실행합니다. LinkeDOM이 구현하지 않는 capture 순서·기본 form 제출과 실제 사이트 전송 여부는 Chrome에서 확인합니다. 이후 동의 전 전송·원본 업로드 방지, 승인된 내용의 한 번만 전송, 입력·첨부 변경 시 재검사, 재생성 파일의 개인정보 잔존 여부 등을 추가로 검증합니다.
+
+## 브라우저 빌드
+
+```sh
+npm run build:chrome   # Chrome Manifest V3, offscreen inference host
+npm run build:firefox  # Firefox Manifest V2, background-page inference host
+npm run test:e2e:firefox
+```
+
+Firefox에는 Chrome Offscreen API가 없어 persistent MV2 background page에서 공유 추론
+Worker를 실행합니다. Detector 메시지·취소 프로토콜은 동일하며 Firefox에서는 WASM backend를
+사용합니다. Manifest는 Firefox의 데이터 수집 동의에 `none`을 선언합니다. 브라우저 E2E는
+파일 input 재주입과 문서 모듈 Worker/WASM을 확인하지만, 실제 확장 설치 후 모델 캐시·추론 및
+각 AI 사이트의 실서비스 DOM·업로드는 배포 전에 Firefox에서 별도 수동 검증이 필요합니다.
