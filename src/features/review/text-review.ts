@@ -9,7 +9,7 @@ interface TextReviewOptions {
   onError(error: unknown): void;
 }
 
-/** 승인한 최종 텍스트를 호출자에게 전달합니다. */
+/** 탐지가 없으면 원문을, 탐지가 있으면 승인한 최종 텍스트를 전송 경로에 전달합니다. */
 export function createTextReviewController(options: TextReviewOptions) {
   let closeCurrent: (() => void) | null = null;
   function close(): void {
@@ -21,6 +21,11 @@ export function createTextReviewController(options: TextReviewOptions) {
     open(result: TextScanResult): void {
       close();
       if (options.getCurrentResult() !== result) return;
+      if (result.detections.length === 0) {
+        try { options.onApproved(result.text); }
+        catch (error) { options.onError(error); }
+        return;
+      }
       const host = document.createElement('div');
       host.dataset.blaindReview = 'text';
       const shadow = host.attachShadow({ mode: 'closed' });

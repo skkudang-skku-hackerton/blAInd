@@ -90,10 +90,13 @@ export default defineContentScript({
         const result = scanner.getResult();
         if (!result) return;
         scanner.clear();
-        notice.show('승인한 내용을 입력창에 반영하고 전송합니다.');
+        const automatic = result.detections.length === 0;
+        notice.dispose();
         void sender.send(result, text).then(() => {
           notice.dispose();
-          console.info('[blAInd] Approved text send requested');
+          console.info(automatic
+            ? '[blAInd] No-detection text send requested'
+            : '[blAInd] Approved text send requested');
         }).catch(() => {
           if (ctx.isInvalid) return;
           notice.show('입력 변경 또는 전송 버튼 확인 실패로 전송을 중단했습니다. 입력창을 확인하고 다시 시도해 주세요.');
@@ -112,7 +115,7 @@ export default defineContentScript({
         review.close();
         downloadProgress = -1;
         console.info(`[blAInd] PII scan started: ${site.name}`, { length: text.length });
-        notice.show('입력한 내용에서 개인정보를 검사하고 있습니다. 전송은 보류됩니다.');
+        if (!fileInterceptor.isProcessing) notice.dispose();
       },
       onResult(result) {
         const { detections } = result;
@@ -128,7 +131,8 @@ export default defineContentScript({
       },
     });
     const unsubscribeStatus = detector.onStatus(status => {
-      if (!scanner.isScanning() && !(fileInterceptor.isProcessing && documentStage === 'scanning')) return;
+      // 텍스트 검사는 조용히 진행하고, 문서 검사 진행 안내는 유지합니다.
+      if (!(fileInterceptor.isProcessing && documentStage === 'scanning')) return;
       if (status.state === 'downloading') {
         const progress = Math.round(status.progress * 100);
         if (progress === downloadProgress) return;
@@ -209,6 +213,6 @@ export default defineContentScript({
       console.error('[blAInd] Background connection failed', error);
     }
 
-    // Alert 승인 후 원문 유효성을 확인하고 교체·전송합니다.
+    // 탐지가 없거나 Alert에서 승인하면 원문 유효성을 확인하고 전송합니다.
   },
 });
