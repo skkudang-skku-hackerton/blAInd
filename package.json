@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "wxt",
-    "build": "wxt build",
+    "build": "npm run build:chrome && npm run build:firefox",
     "test": "vitest run && npm run test:node",
     "test:node": "node --experimental-strip-types --test --experimental-test-isolation=none tests/unit/text-submit-interceptor.test.mjs",
     "build:chrome": "wxt build -b chrome",
