@@ -1,4 +1,7 @@
 import { buildReviewResult } from './policy';
+import { ensureAlertFonts } from './typography';
+import { createPopupLogo, popupThemeStyles } from './popup-theme';
+import { PII_LABELS as labels } from '../core/pii/preferences';
 import type { ApprovedReview, Detection, PrivacyAnalysis } from './types';
 
 export interface PrivacyAlertOptions {
@@ -9,13 +12,6 @@ export interface PrivacyAlertOptions {
   itemContext?: (detection: Detection) => string;
 }
 
-const labels: Record<string, string> = {
-  RRN: '주민등록번호', FRN: '외국인등록번호', CARD_NUMBER: '카드번호', ACCOUNT_NUMBER: '계좌번호',
-  SECRET: '비밀번호 · 키', PASSPORT: '여권번호', DRIVER_LICENSE: '운전면허번호', CVC: '카드 CVC',
-  IPIN: '아이핀', PHONE: '전화번호', EMAIL: '이메일', USER_ID: '사용자 ID', PERSON: '이름',
-  ADDRESS: '주소', ZIPCODE: '우편번호', DATE: '날짜 · 시간', GENERIC_ID: '기타 식별번호', CARD_EXPIRY: '카드 유효기간',
-};
-
 function detectedText(text: string, detection: Detection): string {
   return text.slice(detection.span.start, detection.span.end);
 }
@@ -23,10 +19,14 @@ function detectedText(text: string, detection: Detection): string {
 /** Mounts an accessible privacy review dialog. The caller owns the host and should call the returned cleanup. */
 export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOptions): () => void {
   const document = host.ownerDocument;
+  ensureAlertFonts(document);
   const { analysis, onComplete, onCancel } = options;
+  const automaticDetections = new Set(analysis.autoMaskedDetections);
+  const detections = [...analysis.autoMaskedDetections, ...analysis.confirmDetections]
+    .sort((a, b) => a.span.start - b.span.start || a.span.end - b.span.end);
   const previousFocus = document.activeElement as HTMLElement | null;
   const style = document.createElement('style');
-  style.textContent = alertStyles;
+  style.textContent = `${popupThemeStyles}\n${alertStyles}`;
   const overlay = document.createElement('div');
   overlay.className = 'blaind-alert-backdrop';
   // Shadow DOM isolates styles, but composed UI events still reach the site's
@@ -38,35 +38,61 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     'mousedown', 'mouseup', 'touchstart', 'touchend',
     'keydown', 'keypress', 'keyup', 'input', 'change', 'focusin', 'focusout',
   ]) overlay.addEventListener(type, event => event.stopPropagation());
-  overlay.innerHTML = `<section class="blaind-alert" role="dialog" aria-modal="true" aria-labelledby="blaind-alert-title" aria-describedby="blaind-alert-description" tabindex="-1">
-    <header class="blaind-alert-header"><span class="blaind-alert-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M16 3.5 27 8v7.1c0 6.5-4.5 11.2-11 13.4C9.5 26.3 5 21.6 5 15.1V8l11-4.5Z" stroke="currentColor" stroke-width="2"/><path d="m11.3 15.7 3.1 3.1 6.6-6.7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><p class="blaind-alert-eyebrow"><span class="blaind-alert-live-dot"></span> blAInd <span class="blaind-alert-eyebrow-divider">/</span> PRIVACY CHECK</p><h2 id="blaind-alert-title">보내기 전에 확인해 주세요</h2></div></header>
-    <p id="blaind-alert-description" class="blaind-alert-description"></p>
-    <div class="blaind-alert-auto" aria-live="polite"></div>
-    <fieldset class="blaind-alert-list"><legend>직접 선택할 항목</legend><div class="blaind-alert-items"></div></fieldset>
-    <footer class="blaind-alert-actions"><button type="button" class="blaind-alert-cancel">취소</button><div><button type="button" class="blaind-alert-keep">보호된 내용으로 진행</button><button type="button" class="blaind-alert-mask">선택 항목 가리고 진행</button></div></footer>
+  overlay.innerHTML = `<section class="blaind-alert" role="dialog" aria-modal="true" aria-label="가릴 항목 선택" tabindex="-1">
+    <header class="blaind-alert-header"><p class="blaind-alert-eyebrow blaind-popup-header"><span>개인정보 확인</span></p></header>
+    <div class="blaind-alert-workspace">
+      <section class="blaind-alert-preview" aria-label="보호할 내용">
+        <div class="blaind-alert-preview-legend"><span class="blaind-legend-confirm">선택 가능</span><span class="blaind-legend-selected">선택한 항목</span></div>
+        <div class="blaind-alert-document" role="region" aria-label="보호할 내용 미리보기" tabindex="0"></div>
+      </section>
+      <fieldset class="blaind-alert-list"><legend>가릴 항목 선택</legend>
+        <div class="blaind-alert-selection-toolbar"><label><input type="checkbox" class="blaind-alert-select-all"> 전체 선택</label><span class="blaind-alert-selection-count" role="status"></span></div>
+        <div class="blaind-alert-items"></div>
+      </fieldset>
+    </div>
+    <footer class="blaind-alert-actions"><button type="button" class="blaind-alert-cancel">취소</button><div><button type="button" class="blaind-alert-keep">원문으로 진행</button><button type="button" class="blaind-alert-mask">선택 항목 가리고 진행</button></div></footer>
   </section>`;
+  const logo = createPopupLogo(document);
+  logo.classList.add('blaind-alert-logo');
+  overlay.querySelector('.blaind-alert-eyebrow')!.prepend(logo);
   host.append(style, overlay);
   const dialog = overlay.querySelector<HTMLElement>('[role="dialog"]')!;
-  const auto = overlay.querySelector<HTMLElement>('.blaind-alert-auto')!;
   const items = overlay.querySelector<HTMLElement>('.blaind-alert-items')!;
-  const description = overlay.querySelector<HTMLElement>('#blaind-alert-description')!;
-  const autoCounts = new Map<string, number>();
-  for (const d of analysis.autoMaskedDetections) autoCounts.set(d.type, (autoCounts.get(d.type) ?? 0) + 1);
-  description.textContent = analysis.hasConfirmItems
-    ? '자동 보호 대상은 항상 마스킹됩니다. 아래 항목은 가릴지 선택할 수 있습니다. 겹치는 구간은 자동 보호 또는 선택한 마스킹이 우선합니다.'
-    : analysis.autoMaskedDetections.length ? '아래 정보는 처리 모듈에서 자동으로 마스킹됩니다.' : '개인정보가 탐지되지 않았습니다. 확인 후 진행해 주세요.';
-  if (autoCounts.size) {
-    const summary = [...autoCounts].map(([type, count]) => `${labels[type] ?? type} ${count}개`).join(' · ');
-    auto.textContent = `자동 보호 대상  ${summary}`;
-  } else auto.remove();
-
-  analysis.confirmDetections.forEach((detection, index) => {
-    const inputId = `blaind-confirm-${index}`;
+  const checkboxes: HTMLInputElement[] = [];
+  const selectAll = overlay.querySelector<HTMLInputElement>('.blaind-alert-select-all')!;
+  const count = overlay.querySelector<HTMLElement>('.blaind-alert-selection-count')!;
+  const preview = overlay.querySelector<HTMLElement>('.blaind-alert-document')!;
+  const fragments: { node: HTMLElement; original: string; indexes: number[] }[] = [];
+  const syncSelection = () => {
+    const total = checkboxes.filter(input => input.checked).length;
+    selectAll.checked = total > 0 && total === checkboxes.length;
+    selectAll.indeterminate = total > 0 && total < checkboxes.length;
+    count.textContent = `${total} / ${checkboxes.length}개 선택`;
+    for (const fragment of fragments) {
+      const masked = fragment.indexes.some(index => checkboxes[index]!.checked);
+      fragment.node.dataset.state = masked ? 'selected' : 'confirm';
+      fragment.node.textContent = masked ? '•'.repeat(Math.min(fragment.original.length, 12)) : fragment.original;
+      fragment.node.setAttribute('aria-pressed', String(masked));
+    }
+  };
+  const setChecked = (index: number, checked: boolean) => {
+    const input = checkboxes[index]!;
+    if (input.checked === checked) return;
+    input.checked = checked;
+    options.onSelectionChange?.(detections[index]!, checked);
+  };
+  const highlight = (index: number | null) => {
+    for (const fragment of fragments) fragment.node.classList.toggle('is-active', index !== null && fragment.indexes.includes(index));
+  };
+  detections.forEach((detection, index) => {
+    const inputId = `blaind-choice-${index}`;
     const row = document.createElement('label');
     row.className = 'blaind-alert-item';
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox'; checkbox.value = String(index);
-    checkbox.addEventListener('change', () => options.onSelectionChange?.(detection, checkbox.checked));
+    checkbox.checked = automaticDetections.has(detection);
+    checkboxes.push(checkbox);
+    checkbox.addEventListener('change', () => { syncSelection(); options.onSelectionChange?.(detection, checkbox.checked); });
     checkbox.setAttribute('aria-label', `${labels[detection.type] ?? detection.type} 가리기`);
     const content = document.createElement('span'); content.className = 'blaind-alert-item-copy';
     const kind = document.createElement('span'); kind.className = 'blaind-alert-kind';
@@ -74,29 +100,65 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
     const value = document.createElement('span'); value.className = 'blaind-alert-value';
     value.textContent = detectedText(analysis.originalText, detection);
     content.append(kind, value); row.append(checkbox, content); row.htmlFor = inputId; checkbox.id = inputId;
+    row.addEventListener('mouseenter', () => highlight(index));
+    row.addEventListener('mouseleave', () => highlight(null));
+    checkbox.addEventListener('focus', () => {
+      highlight(index);
+      fragments.find(fragment => fragment.indexes.includes(index))?.node.scrollIntoView?.({ block: 'nearest' });
+    });
+    checkbox.addEventListener('blur', () => highlight(null));
     items.append(row);
   });
-  if (!analysis.hasConfirmItems) overlay.querySelector('.blaind-alert-list')?.remove();
+  selectAll.addEventListener('change', () => {
+    const checked = selectAll.checked;
+    checkboxes.forEach((_, index) => setChecked(index, checked));
+    syncSelection();
+  });
+  // Split at every boundary so overlapping checked items mask their combined coverage.
+  const boundaries = [...new Set([0, analysis.originalText.length, ...detections.flatMap(d => [d.span.start, d.span.end])])].sort((a, b) => a - b);
+  for (let i = 0; i < boundaries.length - 1; i++) {
+    const start = boundaries[i]!, end = boundaries[i + 1]!;
+    const original = analysis.originalText.slice(start, end);
+    const indexes = detections.flatMap((d, index) => d.span.start < end && d.span.end > start ? [index] : []);
+    if (!indexes.length) { preview.append(document.createTextNode(original)); continue; }
+    const node = document.createElement('button');
+    node.className = 'blaind-alert-highlight';
+    node.type = 'button';
+    node.setAttribute('aria-label', `${indexes.map(index => labels[detections[index]!.type] ?? detections[index]!.type).join(' · ')} 가리기 전환`);
+    node.addEventListener('click', () => {
+      const checked = !indexes.some(index => checkboxes[index]!.checked);
+      indexes.forEach(index => setChecked(index, checked));
+      syncSelection();
+      checkboxes[indexes[0]!]!.focus();
+      checkboxes[indexes[0]!]!.closest('label')?.scrollIntoView?.({ block: 'nearest' });
+    });
+    fragments.push({ node, original, indexes });
+    preview.append(node);
+  }
+  if (!analysis.originalText) preview.textContent = '미리볼 내용이 없습니다.';
+  syncSelection();
+  if (!detections.length) overlay.querySelector('.blaind-alert-list')?.remove();
   const cancelButton = overlay.querySelector<HTMLButtonElement>('.blaind-alert-cancel')!;
   const keep = overlay.querySelector<HTMLButtonElement>('.blaind-alert-keep')!;
   const mask = overlay.querySelector<HTMLButtonElement>('.blaind-alert-mask')!;
-  if (!analysis.hasConfirmItems) mask.remove();
-  else keep.textContent = '선택 없이 진행';
+  if (!detections.length) mask.remove();
 
   let finished = false;
-  const finish = (selectedConfirm: readonly Detection[]) => {
+  const finish = (selectedDetections: readonly Detection[]) => {
     if (finished) return;
-    const result = buildReviewResult(analysis, selectedConfirm);
+    const result = buildReviewResult(analysis,
+      selectedDetections.filter(detection => !automaticDetections.has(detection)),
+      selectedDetections.filter(detection => automaticDetections.has(detection)));
     cleanup();
     onComplete(result);
   };
-  const selected = () => [...items.querySelectorAll<HTMLInputElement>('input:checked')]
-    .map((input) => analysis.confirmDetections[Number(input.value)])
+  const selected = () => checkboxes.filter(input => input.checked)
+    .map((input) => detections[Number(input.value)])
     .filter((detection): detection is Detection => detection !== undefined);
   const onKey = (event: KeyboardEvent) => {
     if (event.key === 'Escape') { event.preventDefault(); cancel(); }
     if (event.key === 'Tab') {
-      const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)')];
+      const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]')];
       const first = focusable[0], last = focusable[focusable.length - 1];
       const root = host.getRootNode() as Document | ShadowRoot;
       if (event.shiftKey && root.activeElement === first) { event.preventDefault(); last?.focus(); }
@@ -126,11 +188,80 @@ export function mountPrivacyAlert(host: HTMLElement, options: PrivacyAlertOption
 }
 
 const alertStyles = `
-.blaind-alert-backdrop{position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;padding:16px;background:rgba(8,14,32,.68);backdrop-filter:blur(9px);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033}
-.blaind-alert,.blaind-alert *{box-sizing:border-box}.blaind-alert{position:relative;width:min(100%,540px);max-height:min(90vh,740px);overflow:auto;background:linear-gradient(145deg,#fff 0%,#fbfcff 60%,#f4f7ff 100%);border:1px solid rgba(255,255,255,.85);border-radius:24px;padding:30px;box-shadow:0 32px 100px rgba(5,12,34,.38),0 0 0 1px rgba(112,143,224,.15);outline:none}.blaind-alert:before{content:"";position:absolute;inset:0 0 auto;height:5px;border-radius:24px 24px 0 0;background:linear-gradient(90deg,#39d6c5,#5588ff 52%,#9c6cff)}
-.blaind-alert-header{display:flex;align-items:center;gap:15px}.blaind-alert-mark{display:grid;place-items:center;width:52px;height:52px;flex:none;border-radius:17px;background:linear-gradient(145deg,#e3fffb,#e5edff 72%,#f0e7ff);color:#416ef0;box-shadow:inset 0 1px 0 #fff,0 7px 20px rgba(79,115,211,.14)}.blaind-alert-mark svg{width:31px;height:31px}.blaind-alert-eyebrow{display:flex;align-items:center;gap:7px;margin:0 0 5px;color:#65738e;font-size:10px;font-weight:800;letter-spacing:.12em}.blaind-alert-live-dot{width:7px;height:7px;border-radius:50%;background:#25c8a6;box-shadow:0 0 0 3px rgba(37,200,166,.13)}.blaind-alert-eyebrow-divider{color:#aab4c6}.blaind-alert h2{margin:0;color:#17233c;font-size:21px;line-height:1.35;letter-spacing:-.035em}.blaind-alert-description{margin:22px 0 15px;color:#596781;font-size:14px;line-height:1.7}
-.blaind-alert-auto{display:flex;align-items:center;gap:10px;padding:14px 15px;border:1px solid #cfeee8;border-radius:14px;background:linear-gradient(105deg,#edfcf8,#f0f5ff);color:#214d61;font-size:13px;font-weight:700;line-height:1.55}.blaind-alert-auto:before{content:"✓";display:grid;place-items:center;width:24px;height:24px;flex:none;border-radius:8px;background:#d6f7ee;color:#079879;font-size:14px;font-weight:900}.blaind-alert-list{min-width:0;margin:21px 0 0;padding:0;border:0}.blaind-alert-list legend{margin-bottom:10px;color:#344158;font-size:13px;font-weight:800}.blaind-alert-items{display:grid;gap:8px;max-height:34vh;overflow:auto;padding:1px 3px 2px 1px}.blaind-alert-item{display:flex;align-items:flex-start;gap:12px;min-width:0;padding:13px 14px;border:1px solid #e1e7f1;border-radius:14px;background:rgba(255,255,255,.78);cursor:pointer;transition:border-color .15s ease,background .15s ease,box-shadow .15s ease,transform .15s ease}.blaind-alert-item:hover{transform:translateY(-1px);border-color:#a9bdf4;background:#fff;box-shadow:0 6px 18px rgba(57,82,144,.08)}.blaind-alert-item:has(input:checked){border-color:#8faaf4;background:#f3f6ff;box-shadow:inset 3px 0 #5b7ff0}.blaind-alert-item input{flex:none;width:18px;height:18px;margin:2px 0 0;accent-color:#536ff0}.blaind-alert-item-copy{display:grid;gap:4px;min-width:0}.blaind-alert-kind{font-size:11px;font-weight:800;color:#697792}.blaind-alert-value{overflow-wrap:anywhere;white-space:pre-wrap;color:#1c2942;font-size:14px;line-height:1.5}
-.blaind-alert-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:23px;padding-top:17px;border-top:1px solid #e8ecf4}.blaind-alert-actions>div{display:flex;gap:9px}.blaind-alert button{min-height:43px;padding:0 15px;border:1px solid #dce2ed;border-radius:12px;background:rgba(255,255,255,.8);color:#43516b;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,background .15s ease}.blaind-alert button:hover{transform:translateY(-1px);background:#fff;box-shadow:0 5px 14px rgba(37,55,99,.1)}.blaind-alert button:focus-visible,.blaind-alert-item input:focus-visible{outline:3px solid #83aaf8;outline-offset:2px}.blaind-alert .blaind-alert-mask{border:0;background:linear-gradient(110deg,#3978ef,#6959ed);color:#fff;box-shadow:0 7px 17px rgba(77,101,225,.27)}.blaind-alert .blaind-alert-mask:hover{background:linear-gradient(110deg,#2869e5,#5848dc);box-shadow:0 9px 22px rgba(77,101,225,.35)}
-@media(max-width:440px){.blaind-alert{padding:24px 20px 20px;border-radius:20px}.blaind-alert h2{font-size:19px}.blaind-alert-actions{align-items:stretch;flex-direction:column-reverse}.blaind-alert-actions>div{display:grid}.blaind-alert-actions button{width:100%}}
-@media(prefers-reduced-motion:reduce){.blaind-alert-item,.blaind-alert button{transition:none}.blaind-alert-item:hover,.blaind-alert button:hover{transform:none}}
+.blaind-alert-backdrop {
+  position: fixed; inset: 0; z-index: 2147483647;
+  display: grid; place-items: center; box-sizing: border-box; padding: 20px;
+  background: rgba(12, 12, 12, .32);
+  font-family: var(--blaind-font);
+  font-weight: 400;
+  color: var(--blaind-ink); color-scheme: light;
+}
+.blaind-alert, .blaind-alert * { box-sizing: border-box; }
+.blaind-alert {
+  width: min(100%, 1000px); max-height: min(900px, calc(100dvh - 40px)); overflow: auto;
+  background: var(--blaind-surface); border: 1px solid var(--blaind-border); border-radius: var(--blaind-radius-panel); padding: 28px; outline: none;
+  box-shadow: var(--blaind-shadow);
+}
+.blaind-alert-header { display: flex; align-items: center; gap: 14px; }
+.blaind-alert-selection-count, .blaind-alert-value, .blaind-alert-kind { font-family: "IBM Plex Mono", "IBM Plex Sans KR", monospace; font-weight: 500; }
+.blaind-alert-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 260px); gap: 20px; margin-top: 20px; }
+.blaind-alert-preview { min-width: 0; padding: 18px; border: 1px solid var(--blaind-border); border-radius: var(--blaind-radius-inset); background: var(--blaind-inset); }
+.blaind-alert-preview-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 14px; font-size: 11px; color: var(--blaind-muted); }
+.blaind-alert-preview-legend span:before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+.blaind-legend-confirm:before { background: var(--blaind-soft); border: 1px dashed var(--blaind-muted); }
+.blaind-legend-selected:before { background: var(--blaind-ink); border: 1px solid var(--blaind-ink); }
+.blaind-alert-document { max-height: 42vh; min-height: 220px; overflow: auto; padding: 22px; border: 1px solid var(--blaind-border); border-radius: var(--blaind-radius-button); background: var(--blaind-surface); color: var(--blaind-ink); font-size: 14px; line-height: 2; white-space: pre-wrap; overflow-wrap: anywhere; }
+.blaind-alert-document:focus-visible { outline: 2px solid var(--blaind-ink); outline-offset: 2px; }
+.blaind-alert-list { min-width: 0; margin: 0; padding: 0; border: 0; }
+.blaind-alert-workspace:not(:has(.blaind-alert-list)) { grid-template-columns: minmax(0, 1fr); }
+.blaind-alert-selection-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; padding: 0 4px 10px; border-bottom: 1px solid var(--blaind-border); font-size: 12px; }
+.blaind-alert-selection-toolbar label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.blaind-alert-select-all { width: 18px; height: 18px; margin: 0; accent-color: var(--blaind-ink); }
+.blaind-alert-select-all:focus-visible { outline: 2px solid var(--blaind-ink); outline-offset: 2px; }
+.blaind-alert-selection-count { color: var(--blaind-muted); font-size: 11px; white-space: nowrap; }
+.blaind-alert-list legend { margin-bottom: 10px; color: var(--blaind-ink); font-size: 13px; font-weight: 500; }
+.blaind-alert-items { display: grid; gap: 8px; max-height: 46vh; overflow: auto; padding: 4px; margin: -4px; }
+.blaind-alert-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 4px; border: 0; background: transparent; cursor: pointer; }
+.blaind-alert-item:hover { background: transparent; }
+.blaind-alert-item:has(input:checked) { background: transparent; }
+.blaind-alert-item:focus-within { outline: 2px solid var(--blaind-ink); outline-offset: 2px; }
+.blaind-alert-item input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--blaind-ink); }
+.blaind-alert-item-copy { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.blaind-alert-kind { overflow-wrap: anywhere; font-size: 12px; font-weight: 500; color: var(--blaind-muted); }
+.blaind-alert-value { overflow-wrap: anywhere; white-space: pre-wrap; color: var(--blaind-ink); font-size: 14px; line-height: 1.5; }
+.blaind-alert-actions {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--blaind-border);
+}
+.blaind-alert-actions > div { display: flex; gap: 8px; }
+.blaind-alert button {
+  min-height: 42px; padding: 10px 14px; border: 1px solid var(--blaind-border); border-radius: var(--blaind-radius-button);
+  background: var(--blaind-surface); color: var(--blaind-ink); font-family: inherit; font-size: 13px;
+  font-weight: 500; line-height: 1.5; cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.blaind-alert button:hover { border-color: var(--blaind-border); background: var(--blaind-inset); }
+.blaind-alert button:focus-visible, .blaind-alert-item input:focus-visible { outline: 2px solid var(--blaind-ink); outline-offset: 2px; }
+.blaind-alert .blaind-alert-cancel { border-color: transparent; color: var(--blaind-muted); }
+.blaind-alert .blaind-alert-mask { border-color: var(--blaind-ink); background: var(--blaind-ink); color: var(--blaind-surface); }
+.blaind-alert .blaind-alert-mask:hover { border-color: var(--blaind-ink); background: var(--blaind-ink); opacity: .9; }
+.blaind-alert .blaind-alert-highlight { display: inline; min-height: 0; padding: 0 3px; border: 0; border-radius: 3px; font: inherit; line-height: 1.4; color: var(--blaind-ink); background: var(--blaind-soft); border-bottom: 1px dashed var(--blaind-muted); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.blaind-alert .blaind-alert-highlight[data-state="selected"] { color: var(--blaind-surface); background: var(--blaind-ink); border-bottom: 1px solid var(--blaind-ink); }
+.blaind-alert button.blaind-alert-highlight:hover { background: #ECECE9; }
+.blaind-alert button.blaind-alert-highlight[data-state="selected"]:hover { background: var(--blaind-ink); color: var(--blaind-surface); }
+.blaind-alert .blaind-alert-highlight.is-active { outline: 2px solid var(--blaind-ink); outline-offset: 1px; }
+@media (max-width: 760px) {
+  .blaind-alert-workspace { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .blaind-alert-document { min-height: 140px; max-height: 25vh; padding: 16px; }
+  .blaind-alert-items { max-height: 28vh; }
+}
+@media (max-width: 540px) {
+  .blaind-alert { padding: 22px 20px; }
+  .blaind-alert-actions { align-items: stretch; flex-direction: column-reverse; }
+  .blaind-alert-actions > div { display: grid; gap: 8px; }
+  .blaind-alert-actions button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .blaind-alert-item, .blaind-alert button { transition: none; }
+}
 `;

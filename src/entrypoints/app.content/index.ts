@@ -16,6 +16,8 @@ import { getTextSiteAdapter } from '../../modules/sites/text-adapters';
 import { createTextSubmitInterceptor } from '../../modules/text';
 import { requestBackgroundStatus } from '../../shared/messaging/client';
 import { getRegisteredSite, REGISTERED_SITE_MATCHES } from '../../sites/registry';
+import { initializeMaskingPreferences } from '../../shared/masking-preferences';
+import { ensureAlertFonts } from '../../alert/typography';
 
 export default defineContentScript({
   matches: REGISTERED_SITE_MATCHES,
@@ -29,12 +31,27 @@ export default defineContentScript({
   async main(ctx) {
     const site = getRegisteredSite(new URL(window.location.href));
     if (!site) return;
+    ensureAlertFonts(document);
 
     console.info(`[blAInd] Content Script ready: ${site.name}`);
 
     const notice = createHoldNotice();
     const adapter = getTextSiteAdapter(site.id);
-    const detector = createPiiDetectorClient();
+    const settings = initializeMaskingPreferences();
+    // A failed settings read holds the send/upload path just like a failed scan.
+    void settings.ready.catch(() => {});
+    const client = createPiiDetectorClient();
+    const detector = {
+      ...client,
+      async scanText(...args: Parameters<typeof client.scanText>) {
+        await settings.ready;
+        return client.scanText(...args);
+      },
+      async scanSegments(...args: Parameters<typeof client.scanSegments>) {
+        await settings.ready;
+        return client.scanSegments(...args);
+      },
+    };
     const documentReview = createDocumentReview();
     let documentStage = '';
     let documentFailed = false;
@@ -43,13 +60,8 @@ export default defineContentScript({
       onStage(stage: string) {
         documentStage = stage;
         if (stage === 'extracting') documentFailed = false;
-        const labels: Record<string, string> = {
-          extracting: '문서에서 텍스트를 추출하고 있습니다. 업로드를 보류합니다.',
-          scanning: '문서의 개인정보를 검사하고 있습니다. 업로드를 보류합니다.',
-          reviewing: '확인 창에서 마스킹할 항목을 선택해 주세요.',
-          rebuilding: '선택한 항목을 마스킹한 파일을 만들고 있습니다.',
-        };
-        notice.show(labels[stage] ?? '문서를 처리하고 있습니다.');
+        // Progress and item selection already have their own central UI.
+        if (!documentFailed) notice.dispose();
       },
       onError(error: unknown) {
         documentFailed = true;
@@ -70,14 +82,13 @@ export default defineContentScript({
         pdf: createPdfProcessor({ ...documentOptions, openPdf: openPdfOffscreen }),
         docx: createDocxProcessor({ ...documentOptions, openDocx: openDocxOffscreen }),
       },
-      onProcessed() { notice.show(`검사가 끝난 파일을 ${site.name}에 첨부했습니다.`); },
+      onProcessed() { notice.dispose(); },
       onSkipped() {
         if (!documentFailed) notice.show('문서 업로드를 취소했습니다. 파일은 첨부되지 않았습니다.');
       },
       onError: documentOptions.onError,
     });
     fileInterceptor.start();
-    let downloadProgress = -1;
     const onScanError = (error: unknown) => {
       console.error(`[blAInd] PII scan failed: ${site.name}`, {
         code: error instanceof PiiError ? error.code : 'INFERENCE_FAILED',
@@ -90,17 +101,20 @@ export default defineContentScript({
         const result = scanner.getResult();
         if (!result) return;
         scanner.clear();
-        notice.show('승인한 내용을 입력창에 반영하고 전송합니다.');
+        const automatic = result.detections.length === 0;
+        notice.dispose();
         void sender.send(result, text).then(() => {
           notice.dispose();
-          console.info('[blAInd] Approved text send requested');
+          console.info(automatic
+            ? '[blAInd] No-detection text send requested'
+            : '[blAInd] Approved text send requested');
         }).catch(() => {
           if (ctx.isInvalid) return;
           notice.show('입력 변경 또는 전송 버튼 확인 실패로 전송을 중단했습니다. 입력창을 확인하고 다시 시도해 주세요.');
         });
       },
       onCancelled() {
-        notice.show('확인을 취소했습니다. 입력은 유지되며 전송하지 않습니다.');
+        if (!fileInterceptor.isProcessing) notice.dispose();
       },
       onError: onScanError,
     });
@@ -110,9 +124,8 @@ export default defineContentScript({
       getPageUrl: () => window.location.href,
       onScanning({ text }) {
         review.close();
-        downloadProgress = -1;
         console.info(`[blAInd] PII scan started: ${site.name}`, { length: text.length });
-        notice.show('입력한 내용에서 개인정보를 검사하고 있습니다. 전송은 보류됩니다.');
+        if (!fileInterceptor.isProcessing) notice.dispose();
       },
       onResult(result) {
         const { detections } = result;
@@ -124,21 +137,8 @@ export default defineContentScript({
       onError: onScanError,
       onDiscarded() {
         review.close();
-        notice.show('입력 또는 대화가 변경되어 검사 결과를 폐기했습니다. 전송하려면 다시 검사해 주세요.');
+        if (!fileInterceptor.isProcessing) notice.dispose();
       },
-    });
-    const unsubscribeStatus = detector.onStatus(status => {
-      if (!scanner.isScanning() && !(fileInterceptor.isProcessing && documentStage === 'scanning')) return;
-      if (status.state === 'downloading') {
-        const progress = Math.round(status.progress * 100);
-        if (progress === downloadProgress) return;
-        downloadProgress = progress;
-        notice.show(`개인정보 검사 모델을 준비하고 있습니다 (${progress}%). 전송과 업로드는 보류됩니다.`);
-      } else if (status.state === 'loading') {
-        notice.show('개인정보 검사 모델을 불러오고 있습니다. 전송은 보류됩니다.');
-      } else if (status.state === 'ready') {
-        notice.show('입력한 내용에서 개인정보를 검사하고 있습니다. 전송은 보류됩니다.');
-      }
     });
     const interceptor = createTextSubmitInterceptor({
       adapter,
@@ -180,8 +180,8 @@ export default defineContentScript({
       sender.cancel();
       review.dispose();
       scanner.dispose();
-      unsubscribeStatus();
       detector.dispose();
+      settings.dispose();
       notice.dispose();
     });
 
@@ -209,6 +209,6 @@ export default defineContentScript({
       console.error('[blAInd] Background connection failed', error);
     }
 
-    // Alert 승인 후 원문 유효성을 확인하고 교체·전송합니다.
+    // 탐지가 없거나 Alert에서 승인하면 원문 유효성을 확인하고 전송합니다.
   },
 });

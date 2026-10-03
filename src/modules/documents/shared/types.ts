@@ -1,7 +1,9 @@
 import type { Detection, PiiType, TextSegment } from '../../../core/api/types';
+import type { MaskingPreferences } from '../../../core/pii/preferences';
 
 /** Exact payload defined by docs/alert-review-api.md. */
 export interface AlertReviewRequest {
+  maskingPreferences?: MaskingPreferences;
   segments: Array<TextSegment & { detections: Array<Detection & { word: string }> }>;
 }
 export interface ReviewItem {
@@ -14,8 +16,9 @@ export type AlertReviewDecision =
   | { status: 'cancelled' }
   | {
       status: 'approved';
+      /** AUTO_MASK items that remain selected after review. */
       autoMask: ReviewItem[];
-      /** nonMasking adds no mask; automatic/selected masks win on shared characters. */
+      /** nonMasking includes unchecked items of either policy; selected masks win on shared characters. */
       confirm: { masking: ReviewItem[]; nonMasking: ReviewItem[] };
     };
 

@@ -121,7 +121,8 @@ describe('DOCX engine and real OOXML pipeline', () => {
   it('removes selected source XML text across runs while retaining identical kept text and formatting', async () => {
     const errors: unknown[] = [];
     const review = vi.fn(async (request: AlertReviewRequest) => {
-      expect(Object.keys(request)).toEqual(['segments']);
+      expect(Object.keys(request)).toEqual(['maskingPreferences', 'segments']);
+      expect(request.maskingPreferences?.PHONE).toBe('AUTO_MASK');
       const first = request.segments.find(({ text }) => text.startsWith('😀'))!;
       expect(first.detections).toContainEqual({ type: 'PERSON', confidence: 0.9, word: '김민수', span: { start: 3, end: 6 } });
       return approve(request);
@@ -412,7 +413,7 @@ describe('DOCX review validation and cancellation', () => {
         const decision = approve(request);
         if (kind === 'omitted') decision.autoMask = [];
         if (kind === 'duplicate') decision.autoMask.push(structuredClone(decision.autoMask[0]!));
-        if (kind === 'wrong-policy') decision.confirm.nonMasking.push(decision.autoMask.pop()!);
+        if (kind === 'wrong-policy') decision.confirm.masking.push(decision.autoMask.pop()!);
         if (kind === 'forged-word') decision.autoMask[0]!.word = 'other';
         if (kind === 'forged-span') decision.autoMask[0]!.span.start++;
         if (kind === 'mutated-request') {

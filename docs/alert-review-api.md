@@ -1,6 +1,6 @@
 # Alert Review 데이터 명세
 
-이 문서는 Detector 결과를 Alert에 표시하고, 사용자가 선택한 Confirm 마스킹 여부를 Text/PDF/Word 처리 모듈에 전달하는 데이터 형식을 정의합니다. 별도 HTTP 서버 API가 아니라 확장 프로그램 내부 모듈 간 데이터 계약입니다.
+이 문서는 Detector 결과를 Alert에 표시하고, 사용자가 선택한 항목별 마스킹 여부를 Text/PDF/Word 처리 모듈에 전달하는 데이터 형식을 정의합니다. 별도 HTTP 서버 API가 아니라 확장 프로그램 내부 모듈 간 데이터 계약입니다.
 
 Detector의 `Detection`, `TextSegment`, `SegmentDetectionResult` 정의는 [`pii-detection-model-api.md`](./pii-detection-model-api.md)를 따릅니다.
 
@@ -8,15 +8,21 @@ Detector의 `Detection`, `TextSegment`, `SegmentDetectionResult` 정의는 [`pii
 
 ```text
 Detector 결과 → Alert
-  AUTO_MASK: 사용자 선택 없이 항상 마스킹 대상
-  CONFIRM: 항목마다 사용자가 마스킹 / 원문 유지 선택
+  AUTO_MASK: 처음에는 체크된 상태이며 사용자가 해제 가능
+  CONFIRM: 처음에는 체크되지 않은 상태이며 사용자가 선택 가능
 Alert 결정 → Text 또는 PDF/Word processor
-  AUTO_MASK 적용 + 사용자가 마스킹을 선택한 CONFIRM 적용
+  최종 체크된 AUTO_MASK와 CONFIRM 항목만 마스킹 적용
 ```
 
-Alert는 승인 시 Auto Mask 항목과 Confirm의 마스킹/원문 유지 항목을 세 그룹으로 나눠 모두 전달합니다. 실제 마스킹은 처리 모듈이 합니다. 사용자가 취소하면 처리 모듈을 호출하지 않습니다.
+Alert는 승인 시 선택된 Auto Mask 항목, 선택된 Confirm 항목, 선택하지 않은 항목을 세 그룹으로 나눠 모두 전달합니다. 실제 마스킹은 처리 모듈이 합니다. 사용자가 취소하면 처리 모듈을 호출하지 않습니다.
 
 ## 정책
+
+아래 표는 초기 기본값입니다. 확장 프로그램 버튼의 사용자 설정에서 지원하는 18개 라벨 각각을 `AUTO_MASK` 또는 `CONFIRM`으로 바꾸고 저장할 수 있습니다. 설정은 `browser.storage.local`에 저장되며 다음 검사부터 적용됩니다.
+
+설정은 확인창의 초기 체크 상태를 정합니다. Text/PDF/Word를 포함한 모든 확인창에서 각 항목을 체크하거나 해제할 수 있으며, 이번 확인창의 선택은 저장된 개인 설정을 변경하지 않습니다.
+
+문서 요청은 `maskingPreferences?: Record<PiiType, 'AUTO_MASK' | 'CONFIRM'>` 필드에 검사 당시 설정의 복사본을 포함합니다. Alert 표시와 응답 검증 모두 이 복사본을 사용하므로 확인 중 설정을 변경해도 진행 중인 문서의 분류는 유지됩니다. 이 필드가 없는 기존 요청은 아래 기본값을 사용합니다.
 
 | 구분 | PII type |
 | --- | --- |
@@ -50,7 +56,7 @@ Detector가 겹치는 탐지를 하나의 영역으로 합쳤다면 `constituent
 `type`, `confidence`, 원문 `span`을 보존합니다. Alert에 전달하기 전에
 `expandDetections()`로 이 구성 탐지들을 펼치고, **개별 탐지를 기준으로**
 Auto Mask / Confirm 정책과 사용자 선택을 적용합니다. 바깥 영역의 대표 타입으로
-영역 전체에 정책을 적용하면 선택하지 않은 Confirm까지 가릴 수 있습니다.
+영역 전체에 정책을 적용하면 선택하지 않은 항목까지 가릴 수 있습니다.
 
 ## Alert에 전달하는 데이터
 
@@ -121,9 +127,9 @@ Text에서는 `scanText` 결과를 단일 segment에 넣습니다. 문서에서�
 
 승인 시 처리 대상 전체를 다음 세 그룹으로 나눠 반환합니다.
 
-1. `autoMask`: 정책상 자동으로 마스킹할 항목
+1. `autoMask`: Auto Mask 항목 중 최종적으로 체크된 항목
 2. `confirm.masking`: 사용자가 마스킹을 선택한 Confirm 항목
-3. `confirm.nonMasking`: 사용자가 원문 유지를 선택한 Confirm 항목
+3. `confirm.nonMasking`: 정책과 관계없이 최종적으로 체크되지 않은 항목. 해제한 Auto Mask 항목도 포함합니다.
 
 `status`는 Alert 전체에 대한 사용자의 진행 여부를 나타냅니다. `approved`는 처리를 계속해도 된다는 뜻이고, 실제 항목별 마스킹 여부는 아래 세 그룹으로 구분합니다. 따라서 `status`와 세 그룹은 서로 다른 정보를 전달합니다. 사용자가 취소하면 `status`는 `cancelled`이며 처리 모듈은 호출하지 않습니다.
 
@@ -154,7 +160,9 @@ Text와 PDF/Word 모두 같은 응답 구조를 사용합니다. 각 항목은 �
 }
 ```
 
-Text는 `segmentId: "text"`를 사용합니다. PDF/Word는 원래 segment ID(예: `page-1`)를 사용합니다. Auto Mask는 사용자 선택 없이 항상 `autoMask`에 포함합니다. Confirm 항목은 사용자 선택에 따라 `confirm.masking` 또는 `confirm.nonMasking` 중 하나에만 포함합니다.
+Text는 `segmentId: "text"`를 사용합니다. PDF/Word는 원래 segment ID(예: `page-1`)를 사용합니다. 체크된 Auto Mask 항목은 `autoMask`에, 체크된 Confirm 항목은 `confirm.masking`에 포함합니다. 체크되지 않은 항목은 두 정책 모두 `confirm.nonMasking`에 포함합니다. 모든 탐지는 세 그룹 중 정확히 하나에 있어야 합니다.
+
+검증 시 `autoMask`와 `confirm.masking`은 검사 당시 정책과 일치해야 합니다. `confirm.nonMasking`에는 어느 정책의 항목도 올 수 있지만, 세 그룹 모두 알 수 없는 항목, 중복, 누락, 원문과 다른 `word` 또는 `span`은 거부합니다. 예를 들어 앞의 EMAIL 체크를 해제하면 해당 항목은 `autoMask`에서 `confirm.nonMasking`으로 이동합니다.
 
 취소 응답은 아래와 같습니다. `cancelled`일 때는 항목 그룹을 반환하지 않으며, processor를 호출하지 않습니다.
 
@@ -168,7 +176,7 @@ Text/PDF/Word processor는 원문과 Detector 결과를 보유하고 있다가 A
 
 1. `autoMask`의 모든 항목을 마스킹합니다.
 2. `confirm.masking`의 모든 항목을 마스킹합니다.
-3. `confirm.nonMasking`의 항목은 마스킹 대상에 추가하지 않습니다. 다른 Auto Mask 또는 선택한 Confirm과 겹치는 부분은 그 마스킹에 포함되며, 겹치지 않는 부분만 원문을 유지합니다.
+3. `confirm.nonMasking`의 항목은 마스킹 대상에 추가하지 않습니다. 다른 체크된 항목과 겹치는 부분은 그 마스킹에 포함되며, 겹치지 않는 부분만 원문을 유지합니다.
 4. `segmentId`, `type`, `span`을 함께 사용해 결정을 해당 탐지와 연결합니다. Text도 단일 segment를 사용합니다.
 5. 취소 또는 처리 오류 시 원문을 전송하거나 업로드하지 않습니다.
 6. 아래 컨벤션에 따라 번호를 부여한 뒤, 원문 offset이 변하지 않도록 뒤쪽 위치부터 치환합니다.
@@ -211,25 +219,25 @@ Text/PDF/Word 모두 같은 마스킹 대상·번호 규칙을 적용합니다. 
 마스킹 대상으로 결정된 구간끼리 겹치면 그 **합집합 전체**를 보호합니다.
 정확한 중복, 포함 관계, 부분 겹침, 연쇄 겹침 때문에 선택된 구간의 일부를
 버리지 않습니다. 예를 들어 RRN `[0,5)`와 PHONE `[3,10)`을 선택했다면
-`[0,10)` 전체를 가립니다. 마스킹 대상이 결정되기 전에 선택하지 않은 Confirm
+`[0,10)` 전체를 가립니다. 마스킹 대상이 결정되기 전에 선택하지 않은 탐지
 구간까지 합치지 않습니다.
 
 단일 텍스트 `applyMasking()`은 합쳐진 구간 하나를 라벨 하나로 치환합니다.
 라벨 타입은 시작 위치가 가장 빠른 탐지에서 가져오고, 시작 위치가 같으면
 긴 구간, 그 다음 입력 순서를 사용합니다. 같은 라벨 타입·같은 합집합 원문 값은
 기존처럼 번호를 재사용합니다. 맞닿은 구간은 별도로 치환합니다.
-선택하지 않은 Confirm의 단독 영역은 유지되지만, 선택한 마스킹 구간과 공유하는
+선택하지 않은 항목의 단독 영역은 유지되지만, 선택한 마스킹 구간과 공유하는
 부분은 그 마스킹에 포함됩니다.
 
 문서 review도 구성 탐지를 펼치고 선택된 구간만 합집합으로 처리합니다.
 `confirm.nonMasking`은 해당 탐지를 마스킹 대상에 추가하지 않는 결정이며,
-다른 자동 또는 선택한 마스킹을 취소하는 결정이 아닙니다. 겹침만으로 승인을
+다른 선택한 마스킹을 취소하는 결정이 아닙니다. 겹침만으로 승인을
 거부하지 않습니다. 원문 유지 탐지의 단독 영역까지 마스킹 구간을 넓히지 않습니다.
 Alert는 겹치는 부분에 마스킹이 우선한다는 적용 규칙을 안내합니다.
 
 ### 현재 구현과의 차이
 
-이 컨벤션은 합의된 목표 동작입니다. 현재 텍스트 흐름은 모델 결과를 Alert UI에 표시하고, 선택한 Confirm과 모든 Auto Mask 항목을 마스킹해 입력창에 반영한 뒤 실제 전송 버튼을 한 번 호출합니다. `src/alert/masking.ts`의 `applyMasking`은 같은 타입·같은 원문 값의 라벨을 재사용하고 호출마다 번호를 초기화합니다. 여러 segment의 공통 번호 관리는 후속 구현 대상입니다. 현재 `mountPrivacyAlert`는 Auto Mask·Confirm 마스킹·Confirm 원문 유지의 세 그룹을 반환합니다. `createDocumentReview`는 여러 segment를 확인창에 표시하고, 승인 결과를 원래 segment ID와 offset으로 복원해 문서 처리기에 전달합니다. 텍스트 흐름도 같은 세 그룹 응답에서 마스킹 대상을 가져옵니다. 전송 직전 입력과 대화가 유지되는지 확인하며, 교체 또는 전송 버튼 확인이 실패하면 전송을 중단합니다.
+이 컨벤션은 합의된 목표 동작입니다. 현재 텍스트 흐름은 모델 결과를 Alert UI에 표시하고, 최종 체크된 Confirm과 Auto Mask 항목을 마스킹해 입력창에 반영한 뒤 실제 전송 버튼을 한 번 호출합니다. `src/alert/masking.ts`의 `applyMasking`은 같은 타입·같은 원문 값의 라벨을 재사용하고 호출마다 번호를 초기화합니다. 여러 segment의 공통 번호 관리는 후속 구현 대상입니다. 현재 `mountPrivacyAlert`는 선택된 Auto Mask·선택된 Confirm·두 정책의 원문 유지 항목을 세 그룹으로 반환합니다. `createDocumentReview`는 여러 segment를 확인창에 표시하고, 승인 결과를 원래 segment ID와 offset으로 복원해 문서 처리기에 전달합니다. 텍스트 흐름도 같은 세 그룹 응답에서 마스킹 대상을 가져옵니다. 전송 직전 입력과 대화가 유지되는지 확인하며, 교체 또는 전송 버튼 확인이 실패하면 전송을 중단합니다.
 
 ## 명세에 없는 값
 
@@ -237,5 +245,5 @@ Alert는 겹치는 부분에 마스킹이 우선한다는 적용 규칙을 안�
 - `requestId`: Detector API에 정의된 값이 아닙니다. 단일 내부 요청/응답 흐름에는 필요하지 않아 이 명세에서는 사용하지 않습니다. 비동기 메시지 왕복에서 요청 식별이 필요해지면 별도 합의 후 추가합니다.
 - `confidence`: Detector 응답에는 있지만 사용자의 마스킹 선택을 전달할 때는 불필요하므로 결정 응답에서 제외합니다.
 - `word`: Detector 응답 필드가 아닙니다. Alert 표시를 위해 원문과 span에서 계산해 Alert 전달 데이터에 추가합니다.
-- `span`: Detector 응답에 있는 실제 원문 위치이며, Confirm 결정을 특정 탐지에 연결하고 processor가 치환 위치를 찾기 위해 사용합니다.
+- `span`: Detector 응답에 있는 실제 원문 위치이며, 사용자 결정을 특정 탐지에 연결하고 processor가 치환 위치를 찾기 위해 사용합니다.
 - `segmentId`: 문서는 Detector가 반환한 segment 식별자를 쓰고, Text는 단일 segment의 ID인 `text`를 씁니다.

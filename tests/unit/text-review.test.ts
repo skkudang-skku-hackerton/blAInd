@@ -31,24 +31,41 @@ function setup(detections: TextScanResult['detections'] = [
   review.open(current);
   const root = () => document.querySelector('[data-blaind-review]')?.shadowRoot;
   const click = (selector: string) => root()!.querySelector(selector)!.dispatchEvent(new window.Event('click', { bubbles: true }));
-  return { review, root, click, editor, onApproved, onCancelled, onError,
+  const checkbox = (label: string) => root()!.querySelector<HTMLInputElement>(`input[aria-label="${label} 가리기"]`)!;
+  const change = (label: string, checked: boolean) => {
+    const input = checkbox(label);
+    input.checked = checked;
+    input.dispatchEvent(new window.Event('change', { bubbles: true }));
+  };
+  return { review, root, click, checkbox, change, editor, onApproved, onCancelled, onError,
     invalidate: () => { current = null; } };
 }
 
 describe('model result → privacy review → preview output', () => {
-  it('shows the detected value and masks selected Confirm plus mandatory Auto items', () => {
+  it('shows all detected values and masks selected items including automatic defaults', () => {
     const f = setup();
     expect(f.root()!.querySelector('[role=dialog]')!.textContent).toContain('김민수');
-    f.root()!.querySelector('input')!.setAttribute('checked', '');
+    expect(f.checkbox('전화번호').checked).toBe(true);
+    expect(f.checkbox('이름').checked).toBe(false);
+    f.change('이름', true);
     f.click('.blaind-alert-mask');
     expect(f.onApproved).toHaveBeenCalledExactlyOnceWith('[PERSON_1] [PHONE_1]');
     expect(f.editor.value).toBe('김민수 010-1234-5678');
     expect(f.root()).toBeUndefined();
     expect(f.onError).not.toHaveBeenCalled();
   });
-  it('keeps unselected Confirm but always masks Auto', () => {
-    const f = setup(); f.click('.blaind-alert-keep');
+  it('masks automatic defaults while leaving unselected confirmation items unchanged', () => {
+    const f = setup(); f.click('.blaind-alert-mask');
     expect(f.onApproved).toHaveBeenCalledExactlyOnceWith('김민수 [PHONE_1]');
+  });
+  it('preserves an unchecked automatic item in the final text', () => {
+    const f = setup(); f.change('전화번호', false); f.change('이름', true);
+    f.click('.blaind-alert-mask');
+    expect(f.onApproved).toHaveBeenCalledExactlyOnceWith('[PERSON_1] 010-1234-5678');
+  });
+  it('proceeds with the original text when requested, regardless of checked items', () => {
+    const f = setup(); f.change('이름', true); f.click('.blaind-alert-keep');
+    expect(f.onApproved).toHaveBeenCalledExactlyOnceWith(f.editor.value);
   });
   it.each([false, true])('reviews constituents of a merged region independently (select Confirm: %s)', selectConfirm => {
     const f = setup([{
@@ -57,10 +74,10 @@ describe('model result → privacy review → preview output', () => {
         { type: 'PHONE', confidence: 0.99, span: { start: 4, end: 17 } },
       ],
     }]);
-    expect(f.root()!.querySelectorAll('input')).toHaveLength(1);
-    expect(f.root()!.querySelector('.blaind-alert-value')!.textContent).toBe('김민수 010');
-    if (selectConfirm) f.root()!.querySelector('input')!.setAttribute('checked', '');
-    f.click(selectConfirm ? '.blaind-alert-mask' : '.blaind-alert-keep');
+    expect(f.root()!.querySelectorAll('.blaind-alert-items input')).toHaveLength(2);
+    expect(f.checkbox('이름').closest('label')!.querySelector('.blaind-alert-value')!.textContent).toBe('김민수 010');
+    if (selectConfirm) f.change('이름', true);
+    f.click('.blaind-alert-mask');
     expect(f.onApproved).toHaveBeenCalledExactlyOnceWith(selectConfirm ? '[PERSON_1]' : '김민수 [PHONE_1]');
   });
   it('cancel produces no output', () => {
@@ -78,12 +95,14 @@ describe('model result → privacy review → preview output', () => {
     const f = setup(); f.invalidate(); vi.advanceTimersByTime(100);
     expect(f.root()).toBeUndefined(); expect(vi.getTimerCount()).toBe(0);
   });
-  it('requires approval even when no detections exist', () => {
+  it('forwards unchanged text immediately without a dialog when no detections exist', () => {
+    vi.useFakeTimers();
     const f = setup([]);
-    expect(f.root()!.querySelector('[role=dialog]')!.textContent).toContain('개인정보가 탐지되지 않았습니다');
-    expect(f.onApproved).not.toHaveBeenCalled();
-    f.click('.blaind-alert-keep');
     expect(f.onApproved).toHaveBeenCalledExactlyOnceWith(f.editor.value);
+    expect(f.root()).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(f.onCancelled).not.toHaveBeenCalled();
+    expect(f.onError).not.toHaveBeenCalled();
   });
   it('cannot complete twice from a retained button', () => {
     const f = setup(); const button = f.root()!.querySelector<HTMLButtonElement>('button.blaind-alert-keep')!;

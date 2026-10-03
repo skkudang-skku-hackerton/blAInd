@@ -1,16 +1,12 @@
 import type { ApprovedReview, Detection, DetectionPolicy, PiiType, PrivacyAnalysis } from './types';
 import { expandDetections } from '../core/api/detections';
+import { getMaskingPreferences, type MaskingPreferences } from '../core/pii/preferences';
 
-const AUTO_MASK_TYPES = new Set<PiiType>([
-  'RRN', 'FRN', 'CARD_NUMBER', 'ACCOUNT_NUMBER', 'SECRET', 'PASSPORT',
-  'DRIVER_LICENSE', 'CVC', 'IPIN', 'PHONE', 'EMAIL',
-]);
-
-export function classifyDetection(type: PiiType): DetectionPolicy {
-  return AUTO_MASK_TYPES.has(type) ? 'AUTO_MASK' : 'CONFIRM';
+export function classifyDetection(type: PiiType, preferences = getMaskingPreferences()): DetectionPolicy {
+  return preferences[type];
 }
 
-export function analyzeDetections(text: string, detections: Detection[], segmentId = 'text'): PrivacyAnalysis {
+export function analyzeDetections(text: string, detections: Detection[], segmentId = 'text', preferences: MaskingPreferences = getMaskingPreferences()): PrivacyAnalysis {
   const seen = new Set<string>();
   const usableDetections = expandDetections(detections).filter(({ type, span }) => {
     if (!Number.isInteger(span.start) || !Number.isInteger(span.end)
@@ -20,8 +16,8 @@ export function analyzeDetections(text: string, detections: Detection[], segment
     seen.add(key);
     return true;
   });
-  const autoMaskedDetections = usableDetections.filter(({ type }) => classifyDetection(type) === 'AUTO_MASK');
-  const confirmDetections = usableDetections.filter(({ type }) => classifyDetection(type) === 'CONFIRM');
+  const autoMaskedDetections = usableDetections.filter(({ type }) => classifyDetection(type, preferences) === 'AUTO_MASK');
+  const confirmDetections = usableDetections.filter(({ type }) => classifyDetection(type, preferences) === 'CONFIRM');
   return {
     segmentId,
     originalText: text,
@@ -32,9 +28,15 @@ export function analyzeDetections(text: string, detections: Detection[], segment
 }
 
 /** Returns decisions for a processor; does not modify the original text. */
-export function buildReviewResult(analysis: PrivacyAnalysis, selectedConfirm: readonly Detection[] = []): ApprovedReview {
+export function buildReviewResult(
+  analysis: PrivacyAnalysis,
+  selectedConfirm: readonly Detection[] = [],
+  selectedAuto: readonly Detection[] = analysis.autoMaskedDetections,
+): ApprovedReview {
   const selected = new Set(selectedConfirm);
-  if (selectedConfirm.some(item => !analysis.confirmDetections.includes(item))) {
+  const selectedDefaults = new Set(selectedAuto);
+  if (selectedConfirm.some(item => !analysis.confirmDetections.includes(item))
+    || selectedAuto.some(item => !analysis.autoMaskedDetections.includes(item))) {
     throw new Error('Selected item does not belong to this review');
   }
   const item = (detection: Detection) => ({
@@ -45,10 +47,13 @@ export function buildReviewResult(analysis: PrivacyAnalysis, selectedConfirm: re
   });
   return {
     status: 'approved',
-    autoMask: analysis.autoMaskedDetections.map(item),
+    autoMask: analysis.autoMaskedDetections.filter(detection => selectedDefaults.has(detection)).map(item),
     confirm: {
       masking: analysis.confirmDetections.filter(detection => selected.has(detection)).map(item),
-      nonMasking: analysis.confirmDetections.filter(detection => !selected.has(detection)).map(item),
+      nonMasking: [
+        ...analysis.confirmDetections.filter(detection => !selected.has(detection)),
+        ...analysis.autoMaskedDetections.filter(detection => !selectedDefaults.has(detection)),
+      ].map(item),
     },
   };
 }

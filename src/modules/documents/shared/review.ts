@@ -1,13 +1,9 @@
 import { PII_TYPES } from '../../../core/pii/types';
+import { getMaskingPreferences, normalizeMaskingPreferences, DEFAULT_MASKING_PREFERENCES } from '../../../core/pii/preferences';
 import type { SegmentDetectionResult, TextSegment } from '../../../core/api/types';
 import { expandDetections } from '../../../core/api/detections';
 import type { AlertReviewDecision, AlertReviewRequest, SegmentMasks, ReviewItem, Span } from './types';
 
-const AUTO = new Set([
-  'RRN', 'FRN', 'CARD_NUMBER', 'ACCOUNT_NUMBER', 'SECRET', 'PASSPORT',
-  'DRIVER_LICENSE', 'CVC', 'IPIN', 'PHONE', 'EMAIL',
-]);
-const CONFIRM = new Set(['USER_ID', 'PERSON', 'ADDRESS', 'ZIPCODE', 'DATE', 'GENERIC_ID', 'CARD_EXPIRY']);
 const key = (item: Pick<ReviewItem, 'segmentId' | 'type' | 'span'>): string =>
   JSON.stringify([item.segmentId, item.type, item.span.start, item.span.end]);
 
@@ -33,7 +29,7 @@ export function createReviewRequest(
     if (!ids.has(result.segmentId) || byId.has(result.segmentId)) throw new Error('Unknown or duplicate segment');
     byId.set(result.segmentId, result);
   }
-  return { segments: segments.map(({ id, text }) => {
+  return { maskingPreferences: getMaskingPreferences(), segments: segments.map(({ id, text }) => {
     const seen = new Set<string>();
     return { id, text, detections: expandDetections(byId.get(id)!.detections).map((detection) => {
       checkSpan(text, detection.span);
@@ -68,16 +64,17 @@ export function resolveReview(request: AlertReviewRequest, decision: AlertReview
     expected.set(key(item), item);
   }
   const selected = new Map<string, Span[]>();
+  const preferences = normalizeMaskingPreferences(request.maskingPreferences ?? DEFAULT_MASKING_PREFERENCES);
   for (const [items, policy, mask] of [
-    [decision.autoMask, AUTO, true],
-    [decision.confirm.masking, CONFIRM, true],
-    [decision.confirm.nonMasking, CONFIRM, false],
+    [decision.autoMask, 'AUTO_MASK', true],
+    [decision.confirm.masking, 'CONFIRM', true],
+    [decision.confirm.nonMasking, null, false],
   ] as const) {
     if (!Array.isArray(items)) throw new Error('Invalid review group');
     for (const item of items) {
       const identity = key(item);
       const original = expected.get(identity);
-      if (!original || !policy.has(original.type) || item.word !== original.word) {
+      if (!original || (policy !== null && preferences[original.type] !== policy) || item.word !== original.word) {
         throw new Error('Unknown, duplicate, or incorrectly grouped review item');
       }
       expected.delete(identity);
@@ -85,7 +82,7 @@ export function resolveReview(request: AlertReviewRequest, decision: AlertReview
     }
   }
   if (expected.size) throw new Error('Review omitted detections');
-  // nonMasking adds no mask; it cannot veto automatic or explicitly selected
+  // nonMasking adds no mask for either policy; it cannot veto selected
   // protection over shared characters. Do not extend masks into its exclusive
   // coverage. This matches the text processor's selected-span union policy.
   return request.segments.map(({ id }) => ({ segmentId: id, spans: mergeSpans(selected.get(id) ?? []) }));

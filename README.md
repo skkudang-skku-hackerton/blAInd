@@ -1,10 +1,10 @@
 # blAInd
 
-AI 웹사이트에 질문을 보내기 전에 개인정보를 감지하고, 사용자 선택에 따라 마스킹하는 크롬 확장 프로그램입니다. 텍스트 검사와 모델 추론은 사용자 기기에서 처리하도록 개발합니다.
+AI 웹사이트에 질문을 보내기 전에 개인정보를 감지하고, 사용자 선택에 따라 마스킹하는 브라우저 확장 프로그램입니다. 텍스트 검사와 모델 추론은 사용자 기기에서 처리하도록 개발합니다.
 
 ## 예정 기술 스택
 
-- 확장 프로그램: WXT, Manifest V3
+- 확장 프로그램: WXT, Manifest V2/V3
 - 화면: React, TypeScript
 - 로컬 추론: ONNX Runtime Web, Web Worker
 - 추론 환경: Offscreen Document, WebGPU 또는 WASM
@@ -56,11 +56,11 @@ npm run typecheck
 npm run build
 ```
 
-배포 전 검증과 두 브라우저 빌드는 `npm ci` 후 `npm run build:release`로 실행합니다.
-이 명령은 타입 검사와 두 단위 테스트 모음을 통과한 뒤 Chrome과 Firefox를 빌드합니다.
-`npm run build`는 Chrome과 Firefox 번들을 생성하며 타입 검사나 테스트를 실행하지 않습니다.
+배포 전 검증과 세 브라우저 빌드는 `npm ci` 후 `npm run build:release`로 실행합니다.
+이 명령은 타입 검사와 두 단위 테스트 모음을 통과한 뒤 Chrome, Firefox, Safari를 빌드합니다.
+`npm run build`는 세 브라우저 번들만 생성하며 타입 검사나 테스트를 실행하지 않습니다.
 ONNX Runtime은 외부 ESM/WASM 파일을 확장 내부 `ort-wasm/`에서 로드합니다.
-Chrome은 WASM과 WebGPU용 Asyncify 런타임을 포함하고 Firefox는 WASM 런타임만 포함합니다.
+Chrome은 plain WASM과 WebGPU용 Asyncify 런타임을 포함하고 Firefox와 Safari는 plain WASM 런타임만 포함합니다.
 
 1. 크롬 `chrome://extensions`에서 개발자 모드를 켜고, **압축해제된 확장 프로그램을 로드합니다**로 `.output/chrome-mv3`를 선택합니다.
 2. 이미 로드했다면 blAInd 카드의 새로고침 버튼을 누릅니다. 새 Background 설정을 반영하려면 확장도 다시 로드해야 합니다.
@@ -89,7 +89,7 @@ app.content ← BACKGROUND_STATUS     ← background
 
 ## 현재 구현: 모델 검사·항목 선택·마스킹 전송
 
-등록된 세 사이트에 사이트별 입력창·전송 버튼 어댑터와 공통 전송 인터셉터를 연결했습니다. 텍스트가 있는 채팅 입력창에서 일반 Enter를 누르거나 인식한 전송 버튼을 클릭하면 전송을 보류하고 입력 내용을 유지하며, 화면 오른쪽 아래에 안내를 표시합니다.
+등록된 세 사이트에 사이트별 입력창·전송 버튼 어댑터와 공통 전송 인터셉터를 연결했습니다. 텍스트가 있는 채팅 입력창에서 일반 Enter를 누르거나 인식한 전송 버튼을 클릭하면 입력 내용을 유지한 채 팝업 없이 검사합니다. 탐지 항목이 있으면 확인창을 표시하고, 검사나 전송에 실패하면 안내를 표시합니다.
 
 보류한 시점의 원문을 `createPiiDetectorClient().scanText()`에 전달합니다. 검사 요청은 확장 내부의 Background → Offscreen → Worker로 전달되며, 추론은 사용자 기기에서 실행합니다. 등록된 AI 페이지를 열면 `initialize()`로 모델 준비를 바로 시작합니다. 최초에는 모델을 다운로드하고 이후에는 캐시를 재사용합니다. 준비 중 검사 요청은 진행 중인 초기화를 공유하며, 사전 준비 실패 시 다음 검사에서 다시 시도합니다. 콘솔의 `Model preload started`와 `Model preload ready`로 준비 상태를 확인할 수 있습니다. 채팅 원문을 외부 추론 서버로 보내지 않습니다.
 
@@ -99,7 +99,7 @@ Shift+Enter와 한글 조합 중 Enter, 첨부·음성·생성 중지·비활성
 
 `features/review/text-scan.ts`는 원문과 탐지 구간을 함께 보관하고 `features/review/text-review.ts`가 Alert UI와 마스킹 처리를 연결합니다. 검사 중 같은 원문으로 Enter·버튼을 연속 사용하면 검사를 중복하지 않습니다. 다른 입력의 검사는 이전 요청을 취소하며, 입력 수정·입력창 교체·대화 이동·확장 무효화 뒤의 응답은 폐기합니다.
 
-Alert에서 선택한 Confirm 항목과 모든 Auto Mask 항목을 마스킹합니다. 같은 타입·같은 값은 같은 라벨을 사용합니다. 탐지가 0개여도 승인 후에만 전송합니다. 취소·오류·입력 또는 대화 변경 시에는 전송하지 않습니다. 교체 후 원문 위치와 승인 텍스트를 다시 확인하고, 해당 입력창의 활성 전송 버튼만 한 번 호출합니다. 버튼을 찾지 못하면 교체된 텍스트를 유지하고 전송을 중단합니다. Ctrl/Alt/Meta+Enter 처리는 아직 연결하지 않았습니다. 모듈 API와 확인 방법은 [`src/modules/text/README.md`](src/modules/text/README.md)를 참고해주세요.
+Alert에서 최종 체크된 Confirm과 Auto Mask 항목만 마스킹합니다. Auto Mask 항목은 처음에 체크되어 있으며 해제할 수 있습니다. 같은 타입·같은 값은 같은 라벨을 사용합니다. 텍스트 검사에 성공하고 탐지가 0개이면 확인창이나 전송 안내 팝업 없이 원문을 바로 전송하며, `[blAInd] No-detection text send requested`를 기록합니다. 탐지 항목이 있으면 Alert에서 승인 후 전송합니다. 취소·오류·입력 또는 대화 변경 시에는 전송하지 않습니다. 전송 직전에 입력창과 전송할 텍스트를 다시 확인하고, 해당 입력창의 활성 전송 버튼만 한 번 호출합니다. 버튼을 찾지 못하면 입력을 유지하고 전송을 중단합니다. Ctrl/Alt/Meta+Enter 처리는 아직 연결하지 않았습니다. 모듈 API와 확인 방법은 [`src/modules/text/README.md`](src/modules/text/README.md)를 참고해주세요.
 
 ## 목표 사용자 흐름
 
@@ -254,6 +254,7 @@ Firefox 리뷰용 소스 ZIP을 첨부합니다. Chrome Web Store 및 Firefox Ad
 ```sh
 npm run build:chrome   # Chrome Manifest V3, offscreen inference host
 npm run build:firefox  # Firefox Manifest V2, background-page inference host
+npm run build:safari   # macOS Safari 16.4+ Manifest V2, background-page inference host
 npm run test:e2e:firefox
 ```
 
@@ -262,3 +263,15 @@ Worker를 실행합니다. Detector 메시지·취소 프로토콜은 동일하�
 사용합니다. Manifest는 Firefox의 데이터 수집 동의에 `none`을 선언합니다. 브라우저 E2E는
 파일 input 재주입과 문서 모듈 Worker/WASM을 확인하지만, 실제 확장 설치 후 모델 캐시·추론 및
 각 AI 사이트의 실서비스 DOM·업로드는 배포 전에 Firefox에서 별도 수동 검증이 필요합니다.
+
+Safari 빌드 산출물은 `.output/safari-mv2`에 생성됩니다. 현재 Safari 지원 범위는 persistent
+background page를 사용할 수 있는 macOS Safari 16.4 이상입니다. 이 디렉터리는 Safari에 직접
+배포하는 앱 번들이 아니므로 macOS에서 아래 명령으로 macOS 전용 Xcode 프로젝트를 생성한 뒤,
+Xcode에서 Apple Developer 팀과 앱·확장 Bundle ID 및 서명을 설정하고 빌드하거나 Archive해야
+합니다. Safari 확장 E2E는 자동화되어 있지 않으므로 패키징한 앱의 확장 활성화, 모델
+초기화·추론, 대상 사이트 동작을 수동 검증합니다. iOS/iPadOS는 background 수명과 모델 메모리
+제약 때문에 현재 지원하지 않습니다.
+
+```sh
+xcrun safari-web-extension-packager .output/safari-mv2 --macos-only
+```

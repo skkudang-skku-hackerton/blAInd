@@ -53,7 +53,7 @@ export interface DirectInferenceRpc {
   dispose(): void;
 }
 export interface PiiBackgroundOptions {
-  browser?: 'chrome' | 'firefox';
+  browser?: 'chrome' | 'firefox' | 'safari';
   createDirectRpc?: () => DirectInferenceRpc;
 }
 
@@ -63,7 +63,8 @@ export function installPiiBackground(
   tabs: StatusTabs,
   options: PiiBackgroundOptions = {},
 ): () => void {
-  const targetBrowser = options.browser ?? (import.meta.env.BROWSER === 'firefox' ? 'firefox' : 'chrome');
+  const targetBrowser = options.browser ?? (import.meta.env.BROWSER === 'firefox' || import.meta.env.BROWSER === 'safari'
+    ? import.meta.env.BROWSER : 'chrome');
   const canUseOffscreen = targetBrowser === 'chrome' && !!offscreen && typeof offscreen.hasDocument === 'function' &&
     typeof offscreen.createDocument === 'function';
   const ensureOffscreen = canUseOffscreen ? createOffscreenManager(offscreen!) : undefined;
@@ -73,15 +74,14 @@ export function installPiiBackground(
     void tabs.query({}).then(items => Promise.all(items.filter(tab => tab.id !== undefined)
       .map(tab => tabs.sendMessage(tab.id!, event).catch(() => undefined)))).catch(() => undefined);
   };
-  // Firefox builds do not expose chrome.offscreen. Keep the inference worker in the
-  // persistent MV2 background context; Chromium retains its isolated offscreen document.
+  // Browsers without chrome.offscreen keep inference in their background context.
   let directRpcPromise: Promise<DirectInferenceRpc> | undefined;
-  const directRpc = targetBrowser === 'firefox'
+  const directRpc = targetBrowser !== 'chrome'
     ? () => directRpcPromise ??= (options.createDirectRpc
       ? Promise.resolve(options.createDirectRpc())
-      : import.meta.env.FIREFOX
-        ? import('../platform/firefox-inference-host').then(({ createFirefoxInferenceRpc }) => createFirefoxInferenceRpc(broadcastStatus))
-        : Promise.reject(new PiiError('MODEL_LOAD_FAILED', 'Firefox inference host is unavailable in this build.')))
+      : import.meta.env.FIREFOX || import.meta.env.SAFARI
+        ? import('../platform/background-inference-host').then(({ createBackgroundInferenceRpc }) => createBackgroundInferenceRpc(broadcastStatus))
+        : Promise.reject(new PiiError('MODEL_LOAD_FAILED', 'Background inference host is unavailable in this build.')))
     : undefined;
   const removeServer = installPiiServer(runtime, 'background', async (request, signal) => {
     if (directRpc) return (await directRpc()).request(request, signal);
@@ -120,7 +120,7 @@ export function installPiiBackground(
 
 export default defineBackground(() => {
   installReviewRelay(browser.runtime);
-  if (import.meta.env.FIREFOX) {
+  if (import.meta.env.FIREFOX || import.meta.env.SAFARI) {
     installDocumentServer(browser.runtime as unknown as MessagingRuntime, 'background');
   } else {
     const ensureDocumentHost = createOffscreenManager(browser.offscreen as unknown as OffscreenApi);
