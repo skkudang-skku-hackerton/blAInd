@@ -62,11 +62,7 @@ Content 진입점은 `features/review/text-scan.ts`의 검사 컨트롤러에 �
 
 ## 확인
 
-`npm test`는 Vitest로 검사 컨트롤러와 모델·메시지 모듈 등을 검증합니다. 기존 인터셉터 테스트는 다음 명령으로 별도 실행합니다.
-
-```sh
-node --experimental-strip-types --test --experimental-test-isolation=none tests/unit/text-submit-interceptor.test.mjs
-```
+`npm test`는 Vitest 테스트와 함께 이 인터셉터의 Node 테스트(`tests/unit/text-submit-interceptor.test.mjs`)를 실행합니다. 인터셉터 테스트만 실행하려면 `npm run test:node`를 사용합니다.
 
 LinkeDOM은 브라우저의 capture 순서와 기본 form 제출을 구현하지 않으므로 실제 페이지의 전송 차단 여부는 Chrome에서도 확인합니다.
 

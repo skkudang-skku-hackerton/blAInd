@@ -20,7 +20,7 @@ const processors = { pdf: processPdf };
 ```
 
 `alertClient`는 연결 예시의 의존성 이름이지 현재 제공되는 전역 객체가 아닙니다.
-`createDocumentReview`가 다중 segment의 탐지 항목을 Alert에 표시하고, 세 그룹의 결정을 원래 segment 좌표로 복원합니다. ChatGPT 진입점에 이 검토 함수와 PDF 처리기가 연결돼 있습니다. Chrome은 offscreen, Firefox는 background page에서 문서 Worker를 실행합니다.
+`createDocumentReview`가 다중 segment의 탐지 항목을 Alert에 표시하고, 세 그룹의 결정을 원래 segment 좌표로 복원합니다. `app.content`는 ChatGPT·Claude·Gemini 업로드 인터셉터에 이 검토 함수와 PDF 처리기를 연결합니다. 문서 Worker는 Chrome에서 offscreen, Firefox·Safari에서 background page에서 실행됩니다.
 
 ## API 준수
 
@@ -95,5 +95,5 @@ npx playwright test tests/e2e/pdf-module.spec.ts
 테스트는 실제 생성한 한글 PDF, 선택 구간 제거·원문 유지, 계약 위반 응답,
 취소와 늦은 승인, 파일·페이지 제한을 검증합니다. 브라우저 테스트는 Chromium에서
 번들된 Worker·WASM 로딩과 PDF 재생성을 검증하며 Playwright Chromium 설치가 필요합니다.
-실제 사이트 업로드 E2E는
-entrypoint·코어·Alert 연결 이후 별도로 수행해야 합니다.
+실제 확장 경유 흐름은 `tests/e2e/document-flow.spec.ts`와
+[문서 업로드 테스트](../../../../docs/document-upload-test.md)를 참고하세요.
