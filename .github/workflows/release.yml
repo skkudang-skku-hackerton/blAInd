@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Require tag to match package version
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+          if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) {
+            throw new Error('Release version must use major.minor.patch without a prerelease suffix.');
+          }
+          if (process.env.GITHUB_REF_NAME !== `v${version}`) {
+            throw new Error(`Tag must be v${version}, received ${process.env.GITHUB_REF_NAME}`);
+          }
+          if (lock.version !== version || lock.packages[''].version !== version) {
+            throw new Error('package-lock.json version must match package.json.');
+          }
+          NODE
+
+  package:
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+
+  github-release:
+    name: Publish GitHub release
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: extension-packages
+          path: release
+      - name: Create release and attach packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --generate-notes
+          fi
+          gh release upload "$RELEASE_TAG" release/*.zip --clobber
+
+  publish-chrome:
+    name: Submit Chrome Web Store update
+    needs: github-release
+    if: vars.PUBLISH_CHROME == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: chrome-web-store
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: extension-packages
+          path: release
+      - name: Submit packaged Chrome extension
+        run: npx wxt submit --chrome-api-version v2 --chrome-zip release/*-chrome.zip
+        env:
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+          CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL: ${{ secrets.CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL }}
+          CHROME_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.CHROME_SERVICE_ACCOUNT_PRIVATE_KEY }}
+
+  publish-firefox:
+    name: Submit Firefox Add-ons update
+    needs: github-release
+    if: vars.PUBLISH_FIREFOX == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: firefox-add-ons
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: extension-packages
+          path: release
+      - name: Submit packaged Firefox extension and review sources
+        run: >-
+          npx wxt submit --firefox-channel listed
+          --firefox-zip release/*-firefox.zip
+          --firefox-sources-zip release/*-sources.zip
+        env:
+          FIREFOX_EXTENSION_ID: blaind@skkudang-skku-hackerton.github.io
+          FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}

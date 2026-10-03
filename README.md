@@ -246,6 +246,11 @@ PDF, DOCX, TXT/Markdown 모듈을 제공하며 이후 HWPX로 확장할 계획�
 
 ## 브라우저 빌드
 
+CI는 push와 pull request에서 타입 검사, 단위 테스트, 두 브라우저 ZIP 생성을 실행합니다.
+`v<package.json 버전>` 태그를 push하면 GitHub Release에 Chrome/Firefox 패키지와
+Firefox 리뷰용 소스 ZIP을 첨부합니다. Chrome Web Store 및 Firefox Add-ons 자동 배포를
+활성화하는 방법과 필요한 Secrets는 [CI/CD 및 릴리스 가이드](docs/releases.md)를 참고하세요.
+
 ```sh
 npm run build:chrome   # Chrome Manifest V3, offscreen inference host
 npm run build:firefox  # Firefox Manifest V2, background-page inference host
