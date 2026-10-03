@@ -19,7 +19,7 @@ const processDocx = createDocxProcessor({
 const processors = { pdf: processPdf, docx: processDocx };
 ```
 
-`detector`와 `review`는 호출자가 주입합니다. ChatGPT 진입점은 실제 Detector와 `createDocumentReview`를 연결하며, 여러 segment의 선택을 원래 좌표의 세 그룹 응답으로 복원합니다. 문서 요청은 순서대로 표시하고 signal 취소 시 확인창을 정리합니다. Chrome은 offscreen, Firefox는 background page에서 문서 Worker를 실행합니다.
+`detector`와 `review`는 호출자가 주입합니다. `app.content`는 ChatGPT·Claude·Gemini에 실제 Detector와 `createDocumentReview`를 연결하며, 여러 segment의 선택을 원래 좌표의 세 그룹 응답으로 복원합니다. 문서 요청은 순서대로 표시하고 signal 취소 시 확인창을 정리합니다. 문서 Worker는 Chrome에서 offscreen, Firefox·Safari에서 background page에서 실행됩니다.
 
 ## API 준수
 
@@ -70,10 +70,9 @@ const processors = { pdf: processPdf, docx: processDocx };
 다른 문서 처리는 종료하지 않습니다. 사용자 선택 대기 중에도 signal을 감시하고 늦은
 승인 결과는 폐기합니다.
 
-실제 확장에서는 Worker를 실행할 수 있는 확장 페이지/offscreen 환경과 프론트 review
-연결 계층이 필요합니다. 사이트 CSP와 격리 월드 제한 때문에 content script에서의 직접
-Worker 실행을 가정하지 않습니다. 단계별 UI는 `onStage`에 연결하며 이 모듈은 사이트
-DOM을 조작하지 않습니다. 실제 사이트 업로드 검증은 entrypoint·코어·Alert 연결 후 필요합니다.
+사이트 CSP와 격리 월드 제한 때문에 content script에서 Worker를 직접 실행하지 않고,
+확장에서는 `openDocxOffscreen`으로 offscreen/background page의 Worker를 사용합니다.
+단계별 UI는 `onStage`에 연결하며 이 모듈은 사이트 DOM을 조작하지 않습니다.
 
 ## 검증
 

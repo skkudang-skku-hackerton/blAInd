@@ -6,7 +6,8 @@
 `npm ci`, 타입 검사, 단위 테스트, Chrome/Firefox/Safari 프로덕션 ZIP 생성을 실행합니다.
 Actions 실행의 `extension-packages` artifact에서 세 브라우저 ZIP과 Firefox
 소스 ZIP을 내려받을 수 있습니다. Artifact 보관 기간은 14일입니다.
-실제 AI 사이트와 모델 추론의 브라우저 수동 검증은 기존 README 절차를 따릅니다.
+실제 AI 사이트와 모델 추론은 [README](../README.md#chrome에-설치해-확인하기)와
+[문서 업로드 테스트](document-upload-test.md) 절차로 수동 검증합니다.
 
 ## GitHub 릴리스
 
@@ -19,12 +20,12 @@ Actions 실행의 `extension-packages` artifact에서 세 브라우저 ZIP과 Fi
 npm version patch --no-git-tag-version
 git add package.json package-lock.json
 git commit -m "chore: bump extension version"
-git tag v0.1.1
+git tag v1.0.1
 git push origin HEAD
-git push origin v0.1.1
+git push origin v1.0.1
 ```
 
-예시의 `v0.1.1`은 실제 `package.json` 버전에 맞춰 변경합니다.
+예시의 `v1.0.1`은 실제 `package.json` 버전에 맞춰 변경합니다.
 `release.yml`은 태그와 두 패키지 파일의 버전을 확인하고 CI 전체를 실행한 다음,
 자동 릴리스 노트와 다음 파일을 포함한 GitHub Release를 생성합니다.
 
@@ -88,7 +89,7 @@ macOS에서 릴리스의 `blaind-<version>-safari.zip`을 전용 디렉터리에
 Xcode command-line tools로 macOS 전용 프로젝트를 생성합니다.
 
 ```sh
-unzip blaind-0.1.0-safari.zip -d safari-extension
+unzip blaind-1.0.0-safari.zip -d safari-extension
 xcrun safari-web-extension-packager safari-extension --macos-only
 ```
 

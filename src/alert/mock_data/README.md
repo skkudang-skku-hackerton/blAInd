@@ -4,8 +4,11 @@
 전화번호·이메일은 처음에 체크되어 있고, 이름·사번은 체크되어 있지 않습니다. 모든 항목을 체크하거나 해제할 수 있습니다.
 span은 원문에서 UTF-16 문자열 위치로 계산합니다.
 
-`preview.ts`는 확장 프로그램의 content script에서 호출됩니다.
-개발 모드에서 지원 사이트 화면 왼쪽 아래에 테스트 버튼이 나타납니다.
+> **현재 비활성:** `preview.ts`의 `mountMockAlertPreview()`와 `terminal-*.ts`는 지금 어떤 진입점에서도
+> 호출되지 않으므로 아래 절차를 그대로 따라 해도 테스트 버튼이 나타나지 않습니다. 다시 쓰려면
+> `app.content`(개발 모드 한정)와 background에 연결해야 합니다. `sample.ts`와 데이터 검증 테스트는 그대로 사용할 수 있습니다.
+
+`preview.ts`를 content script에 연결하면 개발 모드에서 지원 사이트 화면 왼쪽 아래에 테스트 버튼이 나타납니다.
 목업 선택 결과는 테스트 패널에 표시됩니다. 실제 입력창에 적용하거나 전송하지 않습니다.
 배포용 `npm run build`에서는 테스트 패널이 활성화되지 않습니다.
 
@@ -13,7 +16,7 @@ span은 원문에서 UTF-16 문자열 위치로 계산합니다.
 
 `blAInd` 폴더에서 의존성을 설치한 뒤 개발 확장을 실행합니다.
 
-```powershell
+```sh
 npm ci
 npm run dev
 ```
@@ -44,6 +47,6 @@ Alert의 완료 콜백은 `status`, `autoMask`, `confirm.masking`, `confirm.nonM
 
 ## 목업 데이터 검증
 
-```powershell
+```sh
 node --experimental-strip-types src/alert/mock_data/mock_data.test.mjs
 ```
