@@ -3,8 +3,8 @@
 ## 자동 검증
 
 `.github/workflows/ci.yml`은 브랜치 push와 pull request에서 Node.js 22로
-`npm ci`, 타입 검사, 단위 테스트, Chrome/Firefox 프로덕션 ZIP 생성을 실행합니다.
-Actions 실행의 `extension-packages` artifact에서 두 브라우저 ZIP과 Firefox
+`npm ci`, 타입 검사, 단위 테스트, Chrome/Firefox/Safari 프로덕션 ZIP 생성을 실행합니다.
+Actions 실행의 `extension-packages` artifact에서 세 브라우저 ZIP과 Firefox
 소스 ZIP을 내려받을 수 있습니다. Artifact 보관 기간은 14일입니다.
 실제 AI 사이트와 모델 추론의 브라우저 수동 검증은 기존 README 절차를 따릅니다.
 
@@ -30,6 +30,7 @@ git push origin v0.1.1
 
 - `blaind-<version>-chrome.zip`: Chrome Web Store 업로드 패키지
 - `blaind-<version>-firefox.zip`: Firefox Add-ons 업로드 패키지
+- `blaind-<version>-safari.zip`: macOS Safari 앱 래퍼 생성용 WebExtension 번들
 - `blaind-<version>-sources.zip`: Mozilla 리뷰용 빌드 소스와 재현 절차
 
 릴리스 실패 시 Actions에서 실패한 작업을 재실행할 수 있습니다. GitHub 릴리스
@@ -76,6 +77,29 @@ Actions **Variables**에 `PUBLISH_FIREFOX=true`를 설정하면 Firefox ZIP과 �
 자동 배포 변수는 각 브라우저별로 설정하며 미설정 시 GitHub 릴리스까지만 진행합니다.
 스토어 제출 성공 이후 실제 공개 시점은 각 스토어의 리뷰 및 승인 과정에 따릅니다.
 인증 정보는 GitHub Secrets 또는 로컬 `.env.submit`에 보관합니다.
+
+## Safari 배포 (macOS)
+
+CI는 Safari Manifest V2 번들을 빌드하고 GitHub Release에 ZIP을 첨부합니다.
+Safari 16.4 이상을 대상으로 plain WASM과 persistent background page를 사용합니다.
+이 ZIP은 Safari에 직접 설치하거나 App Store에 업로드할 수 있는 서명된 앱이 아닙니다.
+
+macOS에서 릴리스의 `blaind-<version>-safari.zip`을 전용 디렉터리에 풀고,
+Xcode command-line tools로 macOS 전용 프로젝트를 생성합니다.
+
+```sh
+unzip blaind-0.1.0-safari.zip -d safari-extension
+xcrun safari-web-extension-packager safari-extension --macos-only
+```
+
+파일명은 실제 릴리스 버전에 맞춰 변경합니다. 로컬에서 직접 생성하려면
+`npm ci && npm run zip:safari`를 실행하고 `.output/safari-mv2`를 packager에 전달합니다.
+Xcode에서 Apple Developer 팀, 앱·확장 Bundle ID, 버전과 서명을 설정한 뒤
+Archive 및 배포를 진행합니다. App Store Connect 제출은 이 앱 래퍼와 Apple 서명
+설정이 준비된 macOS 환경에서 수행합니다. 현재 저장소에는 해당 Xcode 프로젝트와
+서명 구성이 없어 자동 App Store 제출 작업이나 `PUBLISH_SAFARI` 변수는 없습니다.
+macOS Safari에서 확장 활성화, 모델 초기화·추론, 대상 사이트 동작을 수동 검증합니다.
+iOS/iPadOS는 현재 지원 범위에 포함되지 않습니다.
 
 ## 로컬 패키징 및 인증 확인
 

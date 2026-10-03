@@ -23,12 +23,13 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - name: Build Chrome, Firefox, and Firefox review sources
+      - name: Build Chrome, Firefox, Safari, and Firefox review sources
         run: npm run zip
       - name: Upload release packages
         uses: actions/upload-artifact@v4
         with:
           name: extension-packages
           path: .output/*.zip
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
