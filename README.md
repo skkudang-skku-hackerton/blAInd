@@ -43,10 +43,10 @@ TXT/Markdown과 HWPX 처리 모듈은 구현되어 있지만 아직 사이트 �
 
 ### 로컬 모델
 
-| 구분 | Hugging Face 저장소 |
-| --- | --- |
-| 원 모델 | [`id4thomas/ko-pii-detector-ax-tokenclf`](https://huggingface.co/id4thomas/ko-pii-detector-ax-tokenclf) (`skt/A.X-Encoder-base` 기반 한국어 PII 토큰 분류) |
-| ONNX 양자화 | [`tasoo/ko-pii-detector-ax-tokenclf-onnx`](https://huggingface.co/tasoo/ko-pii-detector-ax-tokenclf-onnx) (`model_int8.onnx`, `model_fp16.onnx`) |
+| 구분 | Hugging Face 저장소 | 라이선스 |
+| --- | --- | --- |
+| 원 모델 | [`id4thomas/ko-pii-detector-ax-tokenclf`](https://huggingface.co/id4thomas/ko-pii-detector-ax-tokenclf) (`skt/A.X-Encoder-base` 기반 한국어 PII 토큰 분류) | Apache 2.0 |
+| ONNX 양자화 | [`tasoo/ko-pii-detector-ax-tokenclf-onnx`](https://huggingface.co/tasoo/ko-pii-detector-ax-tokenclf-onnx) (`model_int8.onnx`, `model_fp16.onnx`) | Apache 2.0 |
 
 확장은 ONNX 양자화 모델을 ONNX Runtime Web으로 실행합니다. 사용할 커밋과 파일별 SHA-256은
 `src/core/detector/ko-pii/model-config.ts`에 고정되어 있습니다. 등록된 AI 페이지를 처음 열 때
@@ -134,7 +134,24 @@ tests/
   [Claude](src/modules/sites/claude/file-upload/README.md) · [Gemini](src/modules/sites/gemini/file-upload/README.md)
 - [Firefox 소스 코드 리뷰 안내](SOURCE_CODE_REVIEW.md)
 
-## 라이선스
+## 라이선스 및 출처
 
-이 프로젝트는 [GNU General Public License v3.0 이상](LICENSE)에 따라 배포됩니다.
-전체 약관은 [LICENSE](LICENSE) 파일을 참고하세요.
+이 저장소의 **코드**는 [GNU General Public License v3.0 이상](LICENSE)(GPL-3.0-or-later)에 따라
+배포됩니다. 전체 약관은 [LICENSE](LICENSE) 파일을 참고하세요.
+
+번들에 포함되지 않고 실행 시 Hugging Face에서 내려받는 **양자화 모델 weight**는 원 모델의
+라이선스인 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)을 따릅니다.
+
+### 모델 출처
+
+탐지 모델은 송영록([@id4thomas](https://huggingface.co/id4thomas))님이 공개한
+[`id4thomas/ko-pii-detector-ax-tokenclf`](https://huggingface.co/id4thomas/ko-pii-detector-ax-tokenclf)를
+INT8·FP16으로 양자화하고 ONNX로 변환하여 사용합니다.
+
+- 원 모델: [`id4thomas/ko-pii-detector-ax-tokenclf`](https://huggingface.co/id4thomas/ko-pii-detector-ax-tokenclf) — Apache License 2.0
+- ONNX 양자화 weight: [`tasoo/ko-pii-detector-ax-tokenclf-onnx`](https://huggingface.co/tasoo/ko-pii-detector-ax-tokenclf-onnx) — Apache License 2.0
+- 기반 모델: [`skt/A.X-Encoder-base`](https://huggingface.co/skt/A.X-Encoder-base) — Apache License 2.0
+- 학습 데이터셋: [`BCCard/privacy-filter-openpii-masking`](https://huggingface.co/datasets/BCCard/privacy-filter-openpii-masking) — [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (BCCard 제공, 학습을 위해 필터링·전처리됨)
+
+원 모델 제작자의 안내에 따라, 모델 학습에 사용된 데이터셋 출처를 위와 같이 표기합니다.
+모델 후처리 코드는 [skkudang-skku-hackerton/ko-pii-detector-processing](https://github.com/skkudang-skku-hackerton/ko-pii-detector-processing)에서 확인할 수 있습니다.
