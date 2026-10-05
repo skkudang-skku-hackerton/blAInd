@@ -133,3 +133,8 @@ tests/
 - [사이트 모듈과 업로드 인터셉터](src/modules/sites/README.md): [ChatGPT](src/modules/sites/chatgpt/file-upload/README.md) ·
   [Claude](src/modules/sites/claude/file-upload/README.md) · [Gemini](src/modules/sites/gemini/file-upload/README.md)
 - [Firefox 소스 코드 리뷰 안내](SOURCE_CODE_REVIEW.md)
+
+## 라이선스
+
+이 프로젝트는 [GNU General Public License v3.0 이상](LICENSE)에 따라 배포됩니다.
+전체 약관은 [LICENSE](LICENSE) 파일을 참고하세요.
